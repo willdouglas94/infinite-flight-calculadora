@@ -8,22 +8,25 @@ import WeightInput from '@/components/WeightInput';
 import MetarDisplay from '@/components/MetarDisplay';
 import RunwaySelector from '@/components/RunwaySelector';
 import SpeedCalculator from '@/components/SpeedCalculator';
-import { Aircraft, aircraftDatabase } from '@/data/aircraft';
+import { Aircraft, AIRCRAFT_DB } from '@/data/aircraft';
 import { MetarData } from '@/utils/metar';
 import { Plane, MapPin } from 'lucide-react';
 
 export default function Index() {
-  const [selectedAircraft, setSelectedAircraft] = useState<Aircraft>(aircraftDatabase[0]);
-  const [weight, setWeight] = useState(selectedAircraft.emptyWeight + 10000);
+  const firstAircraftId = Object.keys(AIRCRAFT_DB)[0];
+  const [selectedAircraftId, setSelectedAircraftId] = useState<string>(firstAircraftId);
+  const [selectedAircraft, setSelectedAircraft] = useState<Aircraft>(AIRCRAFT_DB[firstAircraftId]);
+  const [weight, setWeight] = useState(selectedAircraft.empty + 10000);
   const [mode, setMode] = useState<'takeoff' | 'landing'>('takeoff');
   const [metar, setMetar] = useState<MetarData | null>(null);
   const [departureIcao, setDepartureIcao] = useState('');
   const [arrivalIcao, setArrivalIcao] = useState('');
 
-  const handleAircraftChange = (aircraft: Aircraft) => {
+  const handleAircraftChange = (aircraftId: string, aircraft: Aircraft) => {
+    setSelectedAircraftId(aircraftId);
     setSelectedAircraft(aircraft);
     // Reset weight to a reasonable value when aircraft changes
-    setWeight(aircraft.emptyWeight + (aircraft.maxWeight - aircraft.emptyWeight) * 0.7);
+    setWeight(aircraft.empty + (aircraft.max - aircraft.empty) * 0.7);
   };
 
   return (
@@ -48,7 +51,7 @@ export default function Index() {
           {/* Left Column */}
           <div className="space-y-6">
             <Card className="p-6 bg-card border-avionics-border space-y-6">
-              <AircraftSelector selectedAircraft={selectedAircraft} onSelect={handleAircraftChange} />
+              <AircraftSelector selectedAircraftId={selectedAircraftId} onSelect={handleAircraftChange} />
               
               <div className="grid gap-4">
                 <div className="space-y-2">
@@ -82,8 +85,8 @@ export default function Index() {
 
               <WeightInput
                 weight={weight}
-                emptyWeight={selectedAircraft.emptyWeight}
-                maxWeight={selectedAircraft.maxWeight}
+                emptyWeight={selectedAircraft.empty}
+                maxWeight={selectedAircraft.max}
                 onWeightChange={setWeight}
               />
             </Card>

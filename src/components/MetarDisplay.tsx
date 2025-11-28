@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fetchMetar, MetarData } from '@/utils/metar';
@@ -52,6 +52,17 @@ export default function MetarDisplay({ onMetarFetched }: MetarDisplayProps) {
       setLoading(false);
     }
   };
+
+  // Auto-fetch METAR when user types 4 letters
+  useEffect(() => {
+    if (icao.length === 4) {
+      const timeoutId = setTimeout(() => {
+        handleFetch();
+      }, 500); // 500ms debounce to avoid rapid fetches while typing
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [icao]);
 
   return (
     <div className="space-y-3">

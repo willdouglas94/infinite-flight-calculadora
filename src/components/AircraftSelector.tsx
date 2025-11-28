@@ -1,20 +1,14 @@
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Aircraft, aircraftDatabase } from '@/data/aircraft';
+import { Aircraft, getAircraftByGroup } from '@/data/aircraft';
 import { Plane } from 'lucide-react';
 
 interface AircraftSelectorProps {
-  selectedAircraft: Aircraft | null;
-  onSelect: (aircraft: Aircraft) => void;
+  selectedAircraftId: string | null;
+  onSelect: (aircraftId: string, aircraft: Aircraft) => void;
 }
 
-export default function AircraftSelector({ selectedAircraft, onSelect }: AircraftSelectorProps) {
-  const groupedAircraft = aircraftDatabase.reduce((acc, aircraft) => {
-    if (!acc[aircraft.category]) {
-      acc[aircraft.category] = [];
-    }
-    acc[aircraft.category].push(aircraft);
-    return acc;
-  }, {} as Record<string, Aircraft[]>);
+export default function AircraftSelector({ selectedAircraftId, onSelect }: AircraftSelectorProps) {
+  const groupedAircraft = getAircraftByGroup();
 
   return (
     <div className="space-y-2">
@@ -23,21 +17,27 @@ export default function AircraftSelector({ selectedAircraft, onSelect }: Aircraf
         AIRCRAFT
       </label>
       <Select
-        value={selectedAircraft?.id}
+        value={selectedAircraftId || undefined}
         onValueChange={(id) => {
-          const aircraft = aircraftDatabase.find((a) => a.id === id);
-          if (aircraft) onSelect(aircraft);
+          const grouped = getAircraftByGroup();
+          for (const group of Object.values(grouped)) {
+            const found = group.find(([aircraftId]) => aircraftId === id);
+            if (found) {
+              onSelect(found[0], found[1]);
+              break;
+            }
+          }
         }}
       >
         <SelectTrigger className="bg-card border-avionics-border text-lg font-mono">
           <SelectValue placeholder="Select aircraft..." />
         </SelectTrigger>
-        <SelectContent className="bg-card border-avionics-border">
-          {Object.entries(groupedAircraft).map(([category, aircraft]) => (
-            <SelectGroup key={category}>
-              <SelectLabel className="text-primary font-semibold">{category}</SelectLabel>
-              {aircraft.map((ac) => (
-                <SelectItem key={ac.id} value={ac.id} className="font-mono">
+        <SelectContent className="bg-card border-avionics-border z-50">
+          {Object.entries(groupedAircraft).map(([group, aircraft]) => (
+            <SelectGroup key={group}>
+              <SelectLabel className="text-primary font-semibold">{group}</SelectLabel>
+              {aircraft.map(([id, ac]) => (
+                <SelectItem key={id} value={id} className="font-mono">
                   {ac.name}
                 </SelectItem>
               ))}

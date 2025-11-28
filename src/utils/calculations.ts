@@ -24,13 +24,15 @@ export function calculateTakeoffSpeeds(
   flapIndex: number,
   headwind: number = 0
 ): { v1: number; vr: number; v2: number } {
-  const flap = aircraft.flaps[flapIndex];
+  const flap = aircraft.to.flaps[flapIndex];
+  const bVr = aircraft.to.bVr!;
+  const mVr = aircraft.to.mVr!;
   
   // Base VR calculation with weight ratio
-  let vr = aircraft.baseVr + (aircraft.maxVr - aircraft.baseVr) * weightRatio;
+  let vr = bVr + (mVr - bVr) * weightRatio;
   
   // Apply flap factor
-  vr = vr * flap.takeoffFactor;
+  vr = vr * flap.f;
   
   // V1 is 5 knots below VR
   const v1 = vr - 5;
@@ -51,13 +53,15 @@ export function calculateLandingSpeeds(
   flapIndex: number,
   headwind: number = 0
 ): { vref: number; vapp: number } {
-  const flap = aircraft.flaps[flapIndex];
+  const flap = aircraft.ldg.flaps[flapIndex];
+  const bRef = aircraft.ldg.bRef!;
+  const mRef = aircraft.ldg.mRef!;
   
   // Base VREF calculation with weight ratio
-  let vref = aircraft.baseRef + (aircraft.maxRef - aircraft.baseRef) * weightRatio;
+  let vref = bRef + (mRef - bRef) * weightRatio;
   
   // Apply flap factor
-  vref = vref * flap.landingFactor;
+  vref = vref * flap.f;
   
   // VAPP = VREF + (half of headwind + 5), limited between 5 and 20
   const windCorrection = Math.max(5, Math.min(20, (headwind / 2) + 5));

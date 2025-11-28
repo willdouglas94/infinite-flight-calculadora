@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Aircraft } from '@/data/aircraft';
 import { calculateTakeoffSpeeds, calculateLandingSpeeds, calculateWeightRatio } from '@/utils/calculations';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,15 +12,20 @@ interface SpeedCalculatorProps {
 }
 
 export default function SpeedCalculator({ aircraft, weight, mode, headwind }: SpeedCalculatorProps) {
-  const weightRatio = calculateWeightRatio(weight, aircraft.emptyWeight, aircraft.maxWeight);
-  const [selectedFlapIndex, setSelectedFlapIndex] = React.useState(0);
+  const weightRatio = calculateWeightRatio(weight, aircraft.empty, aircraft.max);
+  const [selectedFlapIndex, setSelectedFlapIndex] = useState(0);
+
+  const availableFlaps = mode === 'takeoff' ? aircraft.to.flaps : aircraft.ldg.flaps;
+
+  // Reset flap index if current index is out of bounds
+  if (selectedFlapIndex >= availableFlaps.length) {
+    setSelectedFlapIndex(0);
+  }
 
   const speeds =
     mode === 'takeoff'
       ? calculateTakeoffSpeeds(aircraft, weightRatio, selectedFlapIndex, headwind)
       : calculateLandingSpeeds(aircraft, weightRatio, selectedFlapIndex, headwind);
-
-  const availableFlaps = aircraft.flaps;
 
   return (
     <div className="space-y-4">
@@ -35,10 +41,10 @@ export default function SpeedCalculator({ aircraft, weight, mode, headwind }: Sp
           <SelectTrigger className="bg-card border-avionics-border text-lg font-mono">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="bg-card border-avionics-border">
+          <SelectContent className="bg-card border-avionics-border z-50">
             {availableFlaps.map((flap, index) => (
               <SelectItem key={index} value={index.toString()} className="font-mono">
-                {flap.name}
+                {flap.l}
               </SelectItem>
             ))}
           </SelectContent>
@@ -79,5 +85,3 @@ function SpeedCard({ label, value, color, icon }: { label: string; value: number
     </div>
   );
 }
-
-import * as React from 'react';

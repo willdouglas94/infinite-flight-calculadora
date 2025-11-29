@@ -1,9 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Slider } from '@/components/ui/slider';
-import { Weight, Fuel } from 'lucide-react';
+import { Weight, Package, Users, Fuel } from 'lucide-react';
 
 interface WeightInputProps {
   weight: number;
@@ -14,9 +12,16 @@ interface WeightInputProps {
 
 export default function WeightInput({ weight, emptyWeight, maxWeight, onWeightChange }: WeightInputProps) {
   const [unit, setUnit] = useState<'KG' | 'LBS'>('KG');
-  const [mode, setMode] = useState<'direct' | 'fuel'>('direct');
-  const [fuelRemaining, setFuelRemaining] = useState(0);
-  const [payloadPercent, setPayloadPercent] = useState(50);
+  const [fuel, setFuel] = useState(0);
+  const [cargo, setCargo] = useState(0);
+  const [passengers, setPassengers] = useState(0);
+
+  // Calculate total weight automatically
+  useEffect(() => {
+    const PASSENGER_WEIGHT = 90; // kg (average with luggage)
+    const totalWeight = emptyWeight + fuel + cargo + (passengers * PASSENGER_WEIGHT);
+    onWeightChange(totalWeight);
+  }, [fuel, cargo, passengers, emptyWeight, onWeightChange]);
 
   const displayWeight = unit === 'LBS' ? Math.round(weight * 2.20462) : weight;
   const displayEmpty = unit === 'LBS' ? Math.round(emptyWeight * 2.20462) : emptyWeight;
@@ -26,144 +31,109 @@ export default function WeightInput({ weight, emptyWeight, maxWeight, onWeightCh
   const isUnderweight = weight < emptyWeight;
   const hasWeightWarning = isOverweight || isUnderweight;
 
-  const handleDirectWeightChange = (value: string) => {
+  const handleInputChange = (value: string, setter: (val: number) => void) => {
     const numValue = parseFloat(value) || 0;
     const kgValue = unit === 'LBS' ? numValue / 2.20462 : numValue;
-    onWeightChange(kgValue);
-  };
-
-  const handleFuelChange = (value: string) => {
-    const fuel = parseFloat(value) || 0;
-    const fuelKg = unit === 'LBS' ? fuel / 2.20462 : fuel;
-    setFuelRemaining(fuelKg);
-    calculateWeightFromFuel(fuelKg, payloadPercent);
-  };
-
-  const handlePayloadChange = (value: number[]) => {
-    setPayloadPercent(value[0]);
-    calculateWeightFromFuel(fuelRemaining, value[0]);
-  };
-
-  const calculateWeightFromFuel = (fuel: number, payload: number) => {
-    const maxPayload = (maxWeight - emptyWeight) * 0.6; // Assuming 60% can be payload
-    const payloadWeight = (payload / 100) * maxPayload;
-    const totalWeight = emptyWeight + fuel + payloadWeight;
-    onWeightChange(totalWeight);
+    setter(kgValue);
   };
 
   const weightRatio = ((weight - emptyWeight) / (maxWeight - emptyWeight)) * 100;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
           <Weight className="w-4 h-4 text-primary" />
-          WEIGHT
+          PLANEJAMENTO DE CARGA
         </label>
         <div className="flex gap-1">
-          <Button
-            size="sm"
-            variant={unit === 'KG' ? 'default' : 'secondary'}
+          <button
             onClick={() => setUnit('KG')}
-            className="h-7 px-3 text-xs font-mono"
+            className={`h-7 px-3 text-xs font-mono rounded transition-colors ${
+              unit === 'KG' 
+                ? 'bg-primary text-primary-foreground' 
+                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+            }`}
           >
             KG
-          </Button>
-          <Button
-            size="sm"
-            variant={unit === 'LBS' ? 'default' : 'secondary'}
+          </button>
+          <button
             onClick={() => setUnit('LBS')}
-            className="h-7 px-3 text-xs font-mono"
+            className={`h-7 px-3 text-xs font-mono rounded transition-colors ${
+              unit === 'LBS' 
+                ? 'bg-primary text-primary-foreground' 
+                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+            }`}
           >
             LBS
-          </Button>
+          </button>
         </div>
       </div>
 
-      <div className="flex gap-2 mb-3">
-        <Button
-          size="sm"
-          variant={mode === 'direct' ? 'default' : 'outline'}
-          onClick={() => setMode('direct')}
-          className="flex-1 h-8 text-xs"
-        >
-          <Weight className="w-3 h-3 mr-1" />
-          Direto
-        </Button>
-        <Button
-          size="sm"
-          variant={mode === 'fuel' ? 'default' : 'outline'}
-          onClick={() => setMode('fuel')}
-          className="flex-1 h-8 text-xs"
-        >
-          <Fuel className="w-3 h-3 mr-1" />
-          Por Combustível
-        </Button>
-      </div>
-
-      {mode === 'direct' ? (
+      <div className="grid grid-cols-3 gap-3">
         <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            <Fuel className="w-3 h-3" />
+            COMBUSTÍVEL
+          </label>
           <Input
             type="number"
-            value={displayWeight}
-            onChange={(e) => handleDirectWeightChange(e.target.value)}
-            className={`text-2xl font-mono text-center bg-card h-14 ${
-              hasWeightWarning 
-                ? 'border-red-500 border-2 ring-2 ring-red-500/20' 
-                : 'border-border'
-            }`}
+            value={unit === 'LBS' ? Math.round(fuel * 2.20462) : Math.round(fuel)}
+            onChange={(e) => handleInputChange(e.target.value, setFuel)}
+            className="text-lg font-mono text-center bg-card border-border h-12"
+            placeholder="0"
+            min="0"
           />
-          {hasWeightWarning && (
-            <p className="text-xs font-mono text-red-500 text-center">
-              {isOverweight ? '⚠️ OVERWEIGHT' : '⚠️ UNDERWEIGHT'}
-            </p>
-          )}
         </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Fuel className="w-3 h-3" />
-              COMBUSTÍVEL RESTANTE
-            </label>
-            <Input
-              type="number"
-              value={unit === 'LBS' ? Math.round(fuelRemaining * 2.20462) : Math.round(fuelRemaining)}
-              onChange={(e) => handleFuelChange(e.target.value)}
-              className="text-lg font-mono text-center bg-card border-border h-12"
-              placeholder="0"
-            />
-          </div>
-          
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
-              CARGA/PASSAGEIROS: {payloadPercent}%
-            </label>
-            <Slider
-              value={[payloadPercent]}
-              onValueChange={handlePayloadChange}
-              min={0}
-              max={100}
-              step={5}
-              className="w-full"
-            />
-          </div>
 
-          <div className="p-3 bg-card/50 border border-border rounded-md">
-            <p className="text-xs text-muted-foreground text-center mb-1">PESO CALCULADO</p>
-            <p className={`text-xl font-mono text-center ${
-              hasWeightWarning ? 'text-red-500' : 'text-foreground'
-            }`}>
-              {displayWeight.toLocaleString()} {unit}
-            </p>
-            {hasWeightWarning && (
-              <p className="text-xs font-mono text-red-500 text-center mt-1">
-                {isOverweight ? '⚠️ OVERWEIGHT' : '⚠️ UNDERWEIGHT'}
-              </p>
-            )}
-          </div>
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            <Package className="w-3 h-3" />
+            CARGA
+          </label>
+          <Input
+            type="number"
+            value={unit === 'LBS' ? Math.round(cargo * 2.20462) : Math.round(cargo)}
+            onChange={(e) => handleInputChange(e.target.value, setCargo)}
+            className="text-lg font-mono text-center bg-card border-border h-12"
+            placeholder="0"
+            min="0"
+          />
         </div>
-      )}
+
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            <Users className="w-3 h-3" />
+            PASSAGEIROS
+          </label>
+          <Input
+            type="number"
+            value={passengers}
+            onChange={(e) => setPassengers(parseInt(e.target.value) || 0)}
+            className="text-lg font-mono text-center bg-card border-border h-12"
+            placeholder="0"
+            min="0"
+          />
+        </div>
+      </div>
+
+      <div className={`p-4 rounded-md border-2 ${
+        hasWeightWarning 
+          ? 'bg-red-500/10 border-red-500' 
+          : 'bg-primary/10 border-primary/30'
+      }`}>
+        <p className="text-xs text-muted-foreground text-center mb-1">PESO TOTAL</p>
+        <p className={`text-3xl font-mono text-center font-bold ${
+          hasWeightWarning ? 'text-red-500' : 'text-primary'
+        }`}>
+          {displayWeight.toLocaleString()} {unit}
+        </p>
+        {hasWeightWarning && (
+          <p className="text-xs font-mono text-red-500 text-center mt-2">
+            {isOverweight ? '⚠️ OVERWEIGHT' : '⚠️ UNDERWEIGHT'}
+          </p>
+        )}
+      </div>
 
       <div className="space-y-2">
         <Progress 

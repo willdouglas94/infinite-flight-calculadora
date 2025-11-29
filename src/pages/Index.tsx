@@ -92,7 +92,10 @@ export default function Index() {
             </Card>
 
             <Card className="p-6 bg-card border-avionics-border space-y-4">
-              <MetarDisplay onMetarFetched={setMetar} />
+              <MetarDisplay 
+                onMetarFetched={setMetar} 
+                activeIcao={mode === 'takeoff' ? departureIcao : arrivalIcao}
+              />
               {metar && (
                 <RunwaySelector windDirection={metar.windDirection} windSpeed={metar.windSpeed} />
               )}

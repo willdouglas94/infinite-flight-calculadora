@@ -7,16 +7,20 @@ import { useToast } from '@/hooks/use-toast';
 
 interface MetarDisplayProps {
   onMetarFetched: (metar: MetarData) => void;
+  activeIcao?: string;
 }
 
-export default function MetarDisplay({ onMetarFetched }: MetarDisplayProps) {
+export default function MetarDisplay({ onMetarFetched, activeIcao }: MetarDisplayProps) {
   const [icao, setIcao] = useState('');
   const [metar, setMetar] = useState<MetarData | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const handleFetch = async () => {
-    if (!icao || icao.length !== 4) {
+    // Use activeIcao from props if available, otherwise use local icao state
+    const targetIcao = (activeIcao || icao).trim().toUpperCase();
+    
+    if (!targetIcao || targetIcao.length !== 4) {
       toast({
         title: 'Invalid ICAO',
         description: 'Please enter a 4-letter ICAO code',
@@ -27,18 +31,19 @@ export default function MetarDisplay({ onMetarFetched }: MetarDisplayProps) {
 
     setLoading(true);
     try {
-      const data = await fetchMetar(icao);
+      const data = await fetchMetar(targetIcao);
       if (data) {
         setMetar(data);
+        setIcao(targetIcao); // Update local state to match
         onMetarFetched(data);
         toast({
           title: 'METAR Fetched',
-          description: `Weather data loaded for ${icao.toUpperCase()}`,
+          description: `Weather data loaded for ${targetIcao}`,
         });
       } else {
         toast({
           title: 'METAR Not Found',
-          description: `No weather data available for ${icao.toUpperCase()}`,
+          description: `No weather data available for ${targetIcao}`,
           variant: 'destructive',
         });
       }
@@ -82,7 +87,7 @@ export default function MetarDisplay({ onMetarFetched }: MetarDisplayProps) {
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              LOADING
+              Buscando...
             </>
           ) : (
             <>

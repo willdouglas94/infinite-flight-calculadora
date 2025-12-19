@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import AircraftSelector from '@/components/AircraftSelector';
-import WeightInput from '@/components/WeightInput';
-import MetarDisplay from '@/components/MetarDisplay';
+import WeightInput, { WeightInputRef } from '@/components/WeightInput';
+import MetarDisplay, { MetarDisplayRef } from '@/components/MetarDisplay';
 import RunwaySelector from '@/components/RunwaySelector';
 import SpeedCalculator from '@/components/SpeedCalculator';
+import SimBriefImport from '@/components/SimBriefImport';
 import { Aircraft, AIRCRAFT_DB } from '@/data/aircraft';
 import { MetarData } from '@/utils/metar';
 import { Plane, MapPin } from 'lucide-react';
@@ -22,12 +23,46 @@ export default function Index() {
   const [departureIcao, setDepartureIcao] = useState('');
   const [arrivalIcao, setArrivalIcao] = useState('');
 
+  const weightInputRef = useRef<WeightInputRef>(null);
+  const metarDisplayRef = useRef<MetarDisplayRef>(null);
+
   const handleAircraftChange = (aircraftId: string, aircraft: Aircraft) => {
     setSelectedAircraftId(aircraftId);
     setSelectedAircraft(aircraft);
     // Reset weight to a reasonable value when aircraft changes
     setWeight(aircraft.empty + (aircraft.max - aircraft.empty) * 0.7);
   };
+
+  const handleSimBriefImport = useCallback(async (data: {
+    departureIcao: string;
+    arrivalIcao: string;
+    aircraftId: string | null;
+    fuel: number;
+    cargo: number;
+    passengers: number;
+  }) => {
+    // Set airports
+    setDepartureIcao(data.departureIcao);
+    setArrivalIcao(data.arrivalIcao);
+
+    // Set aircraft if found
+    if (data.aircraftId && AIRCRAFT_DB[data.aircraftId]) {
+      setSelectedAircraftId(data.aircraftId);
+      setSelectedAircraft(AIRCRAFT_DB[data.aircraftId]);
+    }
+
+    // Set weight data
+    if (weightInputRef.current) {
+      weightInputRef.current.setLoadData(data.fuel, data.cargo, data.passengers);
+    }
+
+    // Fetch METAR for departure airport after a short delay
+    setTimeout(async () => {
+      if (metarDisplayRef.current && data.departureIcao) {
+        await metarDisplayRef.current.fetchForIcao(data.departureIcao);
+      }
+    }, 500);
+  }, []);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -45,6 +80,9 @@ export default function Index() {
             ALL JETS
           </Badge>
         </div>
+
+        {/* SimBrief Import */}
+        <SimBriefImport onImport={handleSimBriefImport} />
 
         {/* Main Content */}
         <div className="grid lg:grid-cols-2 gap-6">
@@ -84,6 +122,7 @@ export default function Index() {
               </div>
 
               <WeightInput
+                ref={weightInputRef}
                 weight={weight}
                 emptyWeight={selectedAircraft.empty}
                 maxWeight={selectedAircraft.max}
@@ -93,6 +132,7 @@ export default function Index() {
 
             <Card className="p-6 bg-card border-avionics-border space-y-4">
               <MetarDisplay 
+                ref={metarDisplayRef}
                 onMetarFetched={setMetar} 
                 activeIcao={mode === 'takeoff' ? departureIcao : arrivalIcao}
               />

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Weight, Package, Users, Fuel } from 'lucide-react';
@@ -10,11 +10,25 @@ interface WeightInputProps {
   onWeightChange: (weight: number) => void;
 }
 
-export default function WeightInput({ weight, emptyWeight, maxWeight, onWeightChange }: WeightInputProps) {
+export interface WeightInputRef {
+  setLoadData: (fuel: number, cargo: number, passengers: number) => void;
+}
+
+const WeightInput = forwardRef<WeightInputRef, WeightInputProps>(
+  ({ weight, emptyWeight, maxWeight, onWeightChange }, ref) => {
   const [unit, setUnit] = useState<'KG' | 'LBS'>('KG');
   const [fuel, setFuel] = useState(0);
   const [cargo, setCargo] = useState(0);
   const [passengers, setPassengers] = useState(0);
+
+  // Expose method to set load data from parent
+  useImperativeHandle(ref, () => ({
+    setLoadData: (newFuel: number, newCargo: number, newPassengers: number) => {
+      setFuel(newFuel);
+      setCargo(newCargo);
+      setPassengers(newPassengers);
+    },
+  }));
 
   // Calculate total weight automatically
   useEffect(() => {
@@ -150,4 +164,8 @@ export default function WeightInput({ weight, emptyWeight, maxWeight, onWeightCh
       </div>
     </div>
   );
-}
+});
+
+WeightInput.displayName = 'WeightInput';
+
+export default WeightInput;

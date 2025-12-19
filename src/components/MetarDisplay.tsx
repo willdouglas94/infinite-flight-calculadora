@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fetchMetar, MetarData } from '@/utils/metar';
@@ -10,7 +10,12 @@ interface MetarDisplayProps {
   activeIcao?: string;
 }
 
-export default function MetarDisplay({ onMetarFetched, activeIcao }: MetarDisplayProps) {
+export interface MetarDisplayRef {
+  fetchForIcao: (icaoCode: string) => Promise<void>;
+}
+
+const MetarDisplay = forwardRef<MetarDisplayRef, MetarDisplayProps>(
+  ({ onMetarFetched, activeIcao }, ref) => {
   const [icao, setIcao] = useState('');
   const [metar, setMetar] = useState<MetarData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -57,6 +62,19 @@ export default function MetarDisplay({ onMetarFetched, activeIcao }: MetarDispla
       setLoading(false);
     }
   };
+
+  const fetchForIcao = async (icaoCode: string) => {
+    const targetIcao = icaoCode.trim().toUpperCase();
+    if (targetIcao.length === 4) {
+      setIcao(targetIcao);
+      await handleFetch();
+    }
+  };
+
+  // Expose method to fetch METAR from parent
+  useImperativeHandle(ref, () => ({
+    fetchForIcao,
+  }));
 
   // Auto-fetch METAR when user types 4 letters
   useEffect(() => {
@@ -121,4 +139,8 @@ export default function MetarDisplay({ onMetarFetched, activeIcao }: MetarDispla
       )}
     </div>
   );
-}
+});
+
+MetarDisplay.displayName = 'MetarDisplay';
+
+export default MetarDisplay;

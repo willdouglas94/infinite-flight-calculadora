@@ -8,6 +8,7 @@ interface WeightInputProps {
   emptyWeight: number;
   maxWeight: number;
   onWeightChange: (weight: number) => void;
+  onDataChange?: (fuel: number, cargo: number, passengers: number) => void;
 }
 
 export interface WeightInputRef {
@@ -15,7 +16,7 @@ export interface WeightInputRef {
 }
 
 const WeightInput = forwardRef<WeightInputRef, WeightInputProps>(
-  ({ weight, emptyWeight, maxWeight, onWeightChange }, ref) => {
+  ({ weight, emptyWeight, maxWeight, onWeightChange, onDataChange }, ref) => {
   const [unit, setUnit] = useState<'KG' | 'LBS'>('KG');
   const [fuel, setFuel] = useState(0);
   const [cargo, setCargo] = useState(0);
@@ -35,7 +36,8 @@ const WeightInput = forwardRef<WeightInputRef, WeightInputProps>(
     const PASSENGER_WEIGHT = 90; // kg (average with luggage)
     const totalWeight = emptyWeight + fuel + cargo + (passengers * PASSENGER_WEIGHT);
     onWeightChange(totalWeight);
-  }, [fuel, cargo, passengers, emptyWeight, onWeightChange]);
+    onDataChange?.(fuel, cargo, passengers);
+  }, [fuel, cargo, passengers, emptyWeight, onWeightChange, onDataChange]);
 
   const displayWeight = unit === 'LBS' ? Math.round(weight * 2.20462) : weight;
   const displayEmpty = unit === 'LBS' ? Math.round(emptyWeight * 2.20462) : emptyWeight;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useImperativeHandle, forwardRef } from 'react';
 import { Aircraft } from '@/data/aircraft';
 import { calculateTakeoffSpeeds, calculateLandingSpeeds, calculateWeightRatio } from '@/utils/calculations';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,7 +11,12 @@ interface SpeedCalculatorProps {
   headwind: number;
 }
 
-export default function SpeedCalculator({ aircraft, weight, mode, headwind }: SpeedCalculatorProps) {
+export interface SpeedCalculatorRef {
+  getSpeeds: () => { v1?: number; vr?: number; v2?: number; vref?: number; vapp?: number; flapConfig: string };
+}
+
+const SpeedCalculator = forwardRef<SpeedCalculatorRef, SpeedCalculatorProps>(
+  ({ aircraft, weight, mode, headwind }, ref) => {
   const weightRatio = calculateWeightRatio(weight, aircraft.empty, aircraft.max);
   const [selectedFlapIndex, setSelectedFlapIndex] = useState(0);
 
@@ -26,6 +31,17 @@ export default function SpeedCalculator({ aircraft, weight, mode, headwind }: Sp
     mode === 'takeoff'
       ? calculateTakeoffSpeeds(aircraft, weightRatio, selectedFlapIndex, headwind)
       : calculateLandingSpeeds(aircraft, weightRatio, selectedFlapIndex, headwind);
+
+  const currentFlapLabel = availableFlaps[selectedFlapIndex]?.l || '';
+
+  // Expose method to get current speeds for saving
+  useImperativeHandle(ref, () => ({
+    getSpeeds: () => ({
+      ...(mode === 'takeoff' && 'v1' in speeds ? { v1: speeds.v1, vr: speeds.vr, v2: speeds.v2 } : {}),
+      ...(mode === 'landing' && 'vref' in speeds ? { vref: speeds.vref, vapp: speeds.vapp } : {}),
+      flapConfig: currentFlapLabel,
+    }),
+  }), [speeds, mode, currentFlapLabel]);
 
   return (
     <div className="space-y-4">
@@ -69,7 +85,11 @@ export default function SpeedCalculator({ aircraft, weight, mode, headwind }: Sp
       </div>
     </div>
   );
-}
+});
+
+SpeedCalculator.displayName = 'SpeedCalculator';
+
+export default SpeedCalculator;
 
 function SpeedCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
   return (

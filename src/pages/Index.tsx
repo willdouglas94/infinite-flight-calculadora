@@ -2,16 +2,20 @@ import { useState, useRef, useCallback } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AircraftSelector from '@/components/AircraftSelector';
 import WeightInput, { WeightInputRef } from '@/components/WeightInput';
 import MetarDisplay, { MetarDisplayRef } from '@/components/MetarDisplay';
 import RunwaySelector from '@/components/RunwaySelector';
-import SpeedCalculator from '@/components/SpeedCalculator';
+import SpeedCalculator, { SpeedCalculatorRef } from '@/components/SpeedCalculator';
 import SimBriefImport from '@/components/SimBriefImport';
+import Logbook from '@/components/Logbook';
 import { Aircraft, AIRCRAFT_DB } from '@/data/aircraft';
 import { MetarData } from '@/utils/metar';
-import { Plane, MapPin } from 'lucide-react';
+import { useLogbook, FlightLogEntry } from '@/hooks/useLogbook';
+import { Plane, MapPin, Save, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Index() {
   const firstAircraftId = Object.keys(AIRCRAFT_DB)[0];
@@ -22,14 +26,21 @@ export default function Index() {
   const [metar, setMetar] = useState<MetarData | null>(null);
   const [departureIcao, setDepartureIcao] = useState('');
   const [arrivalIcao, setArrivalIcao] = useState('');
+  const [isSimBriefImport, setIsSimBriefImport] = useState(false);
+  const [fuel, setFuel] = useState(0);
+  const [cargo, setCargo] = useState(0);
+  const [passengers, setPassengers] = useState(0);
 
   const weightInputRef = useRef<WeightInputRef>(null);
   const metarDisplayRef = useRef<MetarDisplayRef>(null);
+  const speedCalcTakeoffRef = useRef<SpeedCalculatorRef>(null);
+  const speedCalcLandingRef = useRef<SpeedCalculatorRef>(null);
+
+  const { entries, saveEntry, deleteEntry } = useLogbook();
 
   const handleAircraftChange = (aircraftId: string, aircraft: Aircraft) => {
     setSelectedAircraftId(aircraftId);
     setSelectedAircraft(aircraft);
-    // Reset weight to a reasonable value when aircraft changes
     setWeight(aircraft.empty + (aircraft.max - aircraft.empty) * 0.7);
   };
 
@@ -41,27 +52,93 @@ export default function Index() {
     cargo: number;
     passengers: number;
   }) => {
-    // Set airports
     setDepartureIcao(data.departureIcao);
     setArrivalIcao(data.arrivalIcao);
+    setIsSimBriefImport(true);
+    setFuel(data.fuel);
+    setCargo(data.cargo);
+    setPassengers(data.passengers);
 
-    // Set aircraft if found
     if (data.aircraftId && AIRCRAFT_DB[data.aircraftId]) {
       setSelectedAircraftId(data.aircraftId);
       setSelectedAircraft(AIRCRAFT_DB[data.aircraftId]);
     }
 
-    // Set weight data
     if (weightInputRef.current) {
       weightInputRef.current.setLoadData(data.fuel, data.cargo, data.passengers);
     }
 
-    // Fetch METAR for departure airport after a short delay
     setTimeout(async () => {
       if (metarDisplayRef.current && data.departureIcao) {
         await metarDisplayRef.current.fetchForIcao(data.departureIcao);
       }
     }, 500);
+  }, []);
+
+  const handleWeightDataChange = useCallback((newFuel: number, newCargo: number, newPax: number) => {
+    setFuel(newFuel);
+    setCargo(newCargo);
+    setPassengers(newPax);
+  }, []);
+
+  const handleSaveToLogbook = useCallback(() => {
+    const takeoffSpeeds = speedCalcTakeoffRef.current?.getSpeeds() || { v1: 0, vr: 0, v2: 0, flapConfig: '' };
+    const landingSpeeds = speedCalcLandingRef.current?.getSpeeds() || { vref: 0, vapp: 0, flapConfig: '' };
+
+    saveEntry({
+      departureIcao,
+      arrivalIcao,
+      aircraftId: selectedAircraftId,
+      aircraftName: selectedAircraft.name,
+      fuel,
+      cargo,
+      passengers,
+      totalWeight: weight,
+      windSpeed: metar?.windSpeed || 0,
+      windDirection: metar?.windDirection || 0,
+      temperature: metar?.temperature || 15,
+      metarRaw: metar?.raw || '',
+      v1: takeoffSpeeds.v1 || 0,
+      vr: takeoffSpeeds.vr || 0,
+      v2: takeoffSpeeds.v2 || 0,
+      vref: landingSpeeds.vref || 0,
+      vapp: landingSpeeds.vapp || 0,
+      isSimBriefImport,
+      flapConfig: mode === 'takeoff' ? takeoffSpeeds.flapConfig : landingSpeeds.flapConfig,
+    });
+
+    toast.success('Voo salvo no Logbook!', {
+      description: `${departureIcao || '----'} → ${arrivalIcao || '----'}`,
+      icon: <CheckCircle className="w-4 h-4" />,
+    });
+
+    setIsSimBriefImport(false);
+  }, [
+    departureIcao, arrivalIcao, selectedAircraftId, selectedAircraft.name,
+    fuel, cargo, passengers, weight, metar, isSimBriefImport, mode, saveEntry
+  ]);
+
+  const handleLoadFromLogbook = useCallback((entry: FlightLogEntry) => {
+    setDepartureIcao(entry.departureIcao);
+    setArrivalIcao(entry.arrivalIcao);
+    setIsSimBriefImport(entry.isSimBriefImport);
+
+    if (AIRCRAFT_DB[entry.aircraftId]) {
+      setSelectedAircraftId(entry.aircraftId);
+      setSelectedAircraft(AIRCRAFT_DB[entry.aircraftId]);
+    }
+
+    if (weightInputRef.current) {
+      weightInputRef.current.setLoadData(entry.fuel, entry.cargo, entry.passengers);
+    }
+
+    setFuel(entry.fuel);
+    setCargo(entry.cargo);
+    setPassengers(entry.passengers);
+
+    toast.success('Voo carregado!', {
+      description: `${entry.departureIcao || '----'} → ${entry.arrivalIcao || '----'}`,
+    });
   }, []);
 
   return (
@@ -76,9 +153,12 @@ export default function Index() {
               <p className="text-sm text-muted-foreground">Infinite Flight Speed Calculator</p>
             </div>
           </div>
-          <Badge variant="secondary" className="text-sm font-mono bg-primary/20 text-primary border-primary/30">
-            ALL JETS
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Logbook entries={entries} onLoad={handleLoadFromLogbook} onDelete={deleteEntry} />
+            <Badge variant="secondary" className="text-sm font-mono bg-primary/20 text-primary border-primary/30 hidden sm:inline-flex">
+              ALL JETS
+            </Badge>
+          </div>
         </div>
 
         {/* SimBrief Import */}
@@ -127,6 +207,7 @@ export default function Index() {
                 emptyWeight={selectedAircraft.empty}
                 maxWeight={selectedAircraft.max}
                 onWeightChange={setWeight}
+                onDataChange={handleWeightDataChange}
               />
             </Card>
 
@@ -157,6 +238,7 @@ export default function Index() {
 
                 <TabsContent value="takeoff">
                   <SpeedCalculator
+                    ref={speedCalcTakeoffRef}
                     aircraft={selectedAircraft}
                     weight={weight}
                     mode="takeoff"
@@ -166,6 +248,7 @@ export default function Index() {
 
                 <TabsContent value="landing">
                   <SpeedCalculator
+                    ref={speedCalcLandingRef}
                     aircraft={selectedAircraft}
                     weight={weight}
                     mode="landing"
@@ -173,6 +256,17 @@ export default function Index() {
                   />
                 </TabsContent>
               </Tabs>
+
+              {/* Save to Logbook Button */}
+              <div className="mt-6 pt-4 border-t border-avionics-border">
+                <Button 
+                  onClick={handleSaveToLogbook}
+                  className="w-full gap-2 h-12 text-base font-mono"
+                >
+                  <Save className="w-5 h-5" />
+                  SALVAR NO LOGBOOK
+                </Button>
+              </div>
             </Card>
           </div>
         </div>

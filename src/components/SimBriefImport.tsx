@@ -71,6 +71,8 @@ interface SimBriefImportProps {
     fuel: number;
     cargo: number;
     passengers: number;
+    departureRunway: string;
+    arrivalRunway: string;
   }) => void;
 }
 
@@ -83,8 +85,8 @@ interface SimBriefWeights {
 }
 
 interface SimBriefResponse {
-  origin?: { icao_code?: string };
-  destination?: { icao_code?: string };
+  origin?: { icao_code?: string; plan_rwy?: string };
+  destination?: { icao_code?: string; plan_rwy?: string };
   aircraft?: { icaocode?: string };
   weights?: SimBriefWeights;
 }
@@ -131,20 +133,29 @@ export default function SimBriefImport({ onImport }: SimBriefImportProps) {
 
       const data: SimBriefResponse = await response.json();
 
-      if (!data.origin || !data.destination) {
+      if (!data?.origin || !data?.destination) {
         throw new Error('Plano de voo não encontrado');
       }
 
-      // Extract data
-      const departureIcao = data.origin.icao_code || '';
-      const arrivalIcao = data.destination.icao_code || '';
-      const aircraftIcao = data.aircraft?.icaocode || '';
+      // Extract data with optional chaining and safe defaults
+      const departureIcao = String(data.origin?.icao_code || '').trim().toUpperCase();
+      const arrivalIcao = String(data.destination?.icao_code || '').trim().toUpperCase();
+      const aircraftIcao = String(data.aircraft?.icaocode || '').trim().toUpperCase();
       
-      // Weights - SimBrief returns in lbs, convert to kg
-      const weights = data.weights || {};
-      const fuelLbs = parseInt(weights.fuel_plan_ramp || weights.block_fuel || '0', 10);
-      const cargoLbs = parseInt(weights.cargo || weights.freight || '0', 10);
-      const passengers = parseInt(weights.pax_count || '0', 10);
+      // Extract planned runways
+      const departureRunway = String(data.origin?.plan_rwy || '').trim().toUpperCase();
+      const arrivalRunway = String(data.destination?.plan_rwy || '').trim().toUpperCase();
+      
+      // Weights - SimBrief returns in lbs, convert to kg with safe parsing
+      const weights = data?.weights || {};
+      const fuelLbs = Number(weights?.fuel_plan_ramp || weights?.block_fuel || 0) || 0;
+      const cargoLbs = Number(weights?.cargo || weights?.freight || 0) || 0;
+      const passengersCount = Number(weights?.pax_count || 0) || 0;
+
+      // Validate numbers to prevent NaN
+      if (isNaN(fuelLbs) || isNaN(cargoLbs) || isNaN(passengersCount)) {
+        throw new Error('Dados de peso inválidos no plano');
+      }
 
       // Convert lbs to kg (1 lb = 0.453592 kg)
       const fuelKg = Math.round(fuelLbs * 0.453592);
@@ -159,12 +170,14 @@ export default function SimBriefImport({ onImport }: SimBriefImportProps) {
         aircraftId,
         fuel: fuelKg,
         cargo: cargoKg,
-        passengers,
+        passengers: passengersCount,
+        departureRunway,
+        arrivalRunway,
       });
 
       if (aircraftId) {
         toast.success('Plano de Voo Carregado!', {
-          description: `${departureIcao} → ${arrivalIcao}`,
+          description: `${departureIcao} → ${arrivalIcao}${departureRunway ? ` | RWY ${departureRunway}` : ''}`,
           icon: <CheckCircle2 className="w-4 h-4" />,
         });
       } else {
@@ -174,8 +187,9 @@ export default function SimBriefImport({ onImport }: SimBriefImportProps) {
         });
       }
     } catch (error) {
-      toast.error('Usuário não encontrado ou erro na API', {
-        description: 'Verifique o username e tente novamente',
+      console.error('SimBrief import error:', error);
+      toast.error('Erro ao importar plano de voo', {
+        description: error instanceof Error ? error.message : 'Verifique o username e tente novamente',
       });
     } finally {
       setLoading(false);

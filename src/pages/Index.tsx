@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import AircraftSelector from '@/components/AircraftSelector';
 import WeightInput, { WeightInputRef } from '@/components/WeightInput';
 import MetarDisplay, { MetarDisplayRef } from '@/components/MetarDisplay';
-import RunwaySelector from '@/components/RunwaySelector';
+import RunwaySelector, { RunwaySelectorRef } from '@/components/RunwaySelector';
 import SpeedCalculator, { SpeedCalculatorRef } from '@/components/SpeedCalculator';
 import SimBriefImport from '@/components/SimBriefImport';
 import Logbook from '@/components/Logbook';
@@ -30,9 +30,13 @@ export default function Index() {
   const [fuel, setFuel] = useState(0);
   const [cargo, setCargo] = useState(0);
   const [passengers, setPassengers] = useState(0);
+  const [departureRunway, setDepartureRunway] = useState('');
+  const [arrivalRunway, setArrivalRunway] = useState('');
+  const [isSimBriefRunway, setIsSimBriefRunway] = useState(false);
 
   const weightInputRef = useRef<WeightInputRef>(null);
   const metarDisplayRef = useRef<MetarDisplayRef>(null);
+  const runwaySelectorRef = useRef<RunwaySelectorRef>(null);
   const speedCalcTakeoffRef = useRef<SpeedCalculatorRef>(null);
   const speedCalcLandingRef = useRef<SpeedCalculatorRef>(null);
 
@@ -51,28 +55,51 @@ export default function Index() {
     fuel: number;
     cargo: number;
     passengers: number;
+    departureRunway: string;
+    arrivalRunway: string;
   }) => {
-    setDepartureIcao(data.departureIcao);
-    setArrivalIcao(data.arrivalIcao);
-    setIsSimBriefImport(true);
-    setFuel(data.fuel);
-    setCargo(data.cargo);
-    setPassengers(data.passengers);
-
-    if (data.aircraftId && AIRCRAFT_DB[data.aircraftId]) {
-      setSelectedAircraftId(data.aircraftId);
-      setSelectedAircraft(AIRCRAFT_DB[data.aircraftId]);
-    }
-
-    if (weightInputRef.current) {
-      weightInputRef.current.setLoadData(data.fuel, data.cargo, data.passengers);
-    }
-
-    setTimeout(async () => {
-      if (metarDisplayRef.current && data.departureIcao) {
-        await metarDisplayRef.current.fetchForIcao(data.departureIcao);
+    try {
+      setDepartureIcao(data.departureIcao || '');
+      setArrivalIcao(data.arrivalIcao || '');
+      setIsSimBriefImport(true);
+      setFuel(data.fuel || 0);
+      setCargo(data.cargo || 0);
+      setPassengers(data.passengers || 0);
+      
+      // Set runways from SimBrief
+      if (data.departureRunway) {
+        setDepartureRunway(data.departureRunway);
+        setIsSimBriefRunway(true);
       }
-    }, 500);
+      if (data.arrivalRunway) {
+        setArrivalRunway(data.arrivalRunway);
+      }
+
+      if (data.aircraftId && AIRCRAFT_DB[data.aircraftId]) {
+        setSelectedAircraftId(data.aircraftId);
+        setSelectedAircraft(AIRCRAFT_DB[data.aircraftId]);
+      }
+
+      if (weightInputRef.current) {
+        weightInputRef.current.setLoadData(data.fuel || 0, data.cargo || 0, data.passengers || 0);
+      }
+
+      // Auto-fill runway selector with departure runway
+      setTimeout(() => {
+        if (runwaySelectorRef.current && data.departureRunway) {
+          runwaySelectorRef.current.setRunway(data.departureRunway);
+        }
+      }, 100);
+
+      setTimeout(async () => {
+        if (metarDisplayRef.current && data.departureIcao) {
+          await metarDisplayRef.current.fetchForIcao(data.departureIcao);
+        }
+      }, 500);
+    } catch (error) {
+      console.error('Error processing SimBrief data:', error);
+      toast.error('Erro ao processar dados do SimBrief');
+    }
   }, []);
 
   const handleWeightDataChange = useCallback((newFuel: number, newCargo: number, newPax: number) => {
@@ -218,7 +245,13 @@ export default function Index() {
                 activeIcao={mode === 'takeoff' ? departureIcao : arrivalIcao}
               />
               {metar && (
-                <RunwaySelector windDirection={metar.windDirection} windSpeed={metar.windSpeed} />
+                <RunwaySelector 
+                  ref={runwaySelectorRef}
+                  windDirection={metar.windDirection} 
+                  windSpeed={metar.windSpeed}
+                  suggestedRunway={mode === 'takeoff' ? departureRunway : arrivalRunway}
+                  isSimBriefSuggestion={isSimBriefRunway}
+                />
               )}
             </Card>
           </div>

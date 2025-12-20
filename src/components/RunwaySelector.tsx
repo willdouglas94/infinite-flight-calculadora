@@ -1,11 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { calculateWindComponents } from '@/utils/calculations';
-import { Navigation, Wind } from 'lucide-react';
+import { Navigation, Wind, Plane } from 'lucide-react';
 
 interface RunwaySelectorProps {
   windDirection: number;
   windSpeed: number;
+  suggestedRunway?: string;
+  isSimBriefSuggestion?: boolean;
+}
+
+export interface RunwaySelectorRef {
+  setRunway: (runway: string) => void;
 }
 
 interface RunwayAnalysis {
@@ -15,8 +22,26 @@ interface RunwayAnalysis {
   crosswind: number;
 }
 
-export default function RunwaySelector({ windDirection, windSpeed }: RunwaySelectorProps) {
+const RunwaySelector = forwardRef<RunwaySelectorRef, RunwaySelectorProps>(
+  ({ windDirection, windSpeed, suggestedRunway, isSimBriefSuggestion }, ref) => {
   const [runwaysInput, setRunwaysInput] = useState('');
+  const [hasSimBriefSuggestion, setHasSimBriefSuggestion] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    setRunway: (runway: string) => {
+      if (runway) {
+        setRunwaysInput(runway.toUpperCase());
+        setHasSimBriefSuggestion(true);
+      }
+    }
+  }));
+
+  useEffect(() => {
+    if (suggestedRunway && suggestedRunway !== runwaysInput) {
+      setRunwaysInput(suggestedRunway.toUpperCase());
+      setHasSimBriefSuggestion(isSimBriefSuggestion || false);
+    }
+  }, [suggestedRunway, isSimBriefSuggestion]);
 
   const parseRunways = (): RunwayAnalysis[] => {
     const runways = runwaysInput
@@ -46,12 +71,21 @@ export default function RunwaySelector({ windDirection, windSpeed }: RunwaySelec
       <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
         <Navigation className="w-4 h-4 text-primary" />
         RUNWAY ANALYSIS
+        {hasSimBriefSuggestion && (
+          <Badge variant="secondary" className="text-xs bg-primary/20 text-primary border-primary/30 gap-1">
+            <Plane className="w-3 h-3" />
+            SimBrief
+          </Badge>
+        )}
       </label>
 
       <Input
         placeholder="e.g., 09L, 27R, 15"
         value={runwaysInput}
-        onChange={(e) => setRunwaysInput(e.target.value.toUpperCase())}
+        onChange={(e) => {
+          setRunwaysInput(e.target.value.toUpperCase());
+          setHasSimBriefSuggestion(false);
+        }}
         className="font-mono text-lg uppercase bg-card border-avionics-border"
       />
 
@@ -97,4 +131,8 @@ export default function RunwaySelector({ windDirection, windSpeed }: RunwaySelec
       )}
     </div>
   );
-}
+});
+
+RunwaySelector.displayName = 'RunwaySelector';
+
+export default RunwaySelector;

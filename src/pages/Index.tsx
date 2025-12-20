@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,14 +14,17 @@ import Logbook from '@/components/Logbook';
 import { Aircraft, AIRCRAFT_DB } from '@/data/aircraft';
 import { MetarData } from '@/utils/metar';
 import { useLogbook, FlightLogEntry } from '@/hooks/useLogbook';
-import { Plane, MapPin, Save, CheckCircle } from 'lucide-react';
+import { Plane, MapPin, Save, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
+// Default aircraft fallback
+const DEFAULT_AIRCRAFT_ID = 'B777-300ER';
+
 export default function Index() {
-  const firstAircraftId = Object.keys(AIRCRAFT_DB)[0];
+  const firstAircraftId = Object.keys(AIRCRAFT_DB)[0] || DEFAULT_AIRCRAFT_ID;
   const [selectedAircraftId, setSelectedAircraftId] = useState<string>(firstAircraftId);
-  const [selectedAircraft, setSelectedAircraft] = useState<Aircraft>(AIRCRAFT_DB[firstAircraftId]);
-  const [weight, setWeight] = useState(selectedAircraft.empty + 10000);
+  const [selectedAircraft, setSelectedAircraft] = useState<Aircraft | null>(AIRCRAFT_DB[firstAircraftId] || null);
+  const [weight, setWeight] = useState((selectedAircraft?.empty || 50000) + 10000);
   const [mode, setMode] = useState<'takeoff' | 'landing'>('takeoff');
   const [metar, setMetar] = useState<MetarData | null>(null);
   const [departureIcao, setDepartureIcao] = useState('');
@@ -33,6 +36,8 @@ export default function Index() {
   const [departureRunway, setDepartureRunway] = useState('');
   const [arrivalRunway, setArrivalRunway] = useState('');
   const [isSimBriefRunway, setIsSimBriefRunway] = useState(false);
+  const [departureMetar, setDepartureMetar] = useState<MetarData | null>(null);
+  const [arrivalMetar, setArrivalMetar] = useState<MetarData | null>(null);
 
   const weightInputRef = useRef<WeightInputRef>(null);
   const metarDisplayRef = useRef<MetarDisplayRef>(null);
@@ -42,7 +47,11 @@ export default function Index() {
 
   const { entries, saveEntry, deleteEntry } = useLogbook();
 
+  // GUARD CLAUSE: Ensure we always have a valid aircraft
+  const currentAircraft = selectedAircraft || AIRCRAFT_DB[DEFAULT_AIRCRAFT_ID];
+
   const handleAircraftChange = (aircraftId: string, aircraft: Aircraft) => {
+    if (!aircraft) return;
     setSelectedAircraftId(aircraftId);
     setSelectedAircraft(aircraft);
     setWeight(aircraft.empty + (aircraft.max - aircraft.empty) * 0.7);
@@ -52,6 +61,7 @@ export default function Index() {
     departureIcao: string;
     arrivalIcao: string;
     aircraftId: string | null;
+    aircraftNotFound: boolean;
     fuel: number;
     cargo: number;
     passengers: number;
@@ -75,9 +85,16 @@ export default function Index() {
         setArrivalRunway(data.arrivalRunway);
       }
 
+      // SAFE AIRCRAFT HANDLING: Use fallback if not found
       if (data.aircraftId && AIRCRAFT_DB[data.aircraftId]) {
         setSelectedAircraftId(data.aircraftId);
         setSelectedAircraft(AIRCRAFT_DB[data.aircraftId]);
+      } else if (data.aircraftNotFound) {
+        // Keep current aircraft but show warning
+        toast.warning('Aeronave não encontrada no banco de dados', {
+          description: 'Selecione a aeronave manualmente',
+          icon: <AlertCircle className="w-4 h-4" />,
+        });
       }
 
       if (weightInputRef.current) {
@@ -102,6 +119,33 @@ export default function Index() {
     }
   }, []);
 
+  // TAB AUTOMATION: Auto-fetch METAR when switching tabs
+  useEffect(() => {
+    const handleModeSwitch = async () => {
+      if (mode === 'landing' && arrivalIcao && arrivalIcao.length === 4) {
+        // Switching to LANDING - fetch arrival METAR
+        if (metarDisplayRef.current) {
+          await metarDisplayRef.current.fetchForIcao(arrivalIcao);
+        }
+        // Set arrival runway if available
+        if (runwaySelectorRef.current && arrivalRunway) {
+          runwaySelectorRef.current.setRunway(arrivalRunway);
+        }
+      } else if (mode === 'takeoff' && departureIcao && departureIcao.length === 4) {
+        // Switching to TAKEOFF - fetch departure METAR
+        if (metarDisplayRef.current) {
+          await metarDisplayRef.current.fetchForIcao(departureIcao);
+        }
+        // Set departure runway if available
+        if (runwaySelectorRef.current && departureRunway) {
+          runwaySelectorRef.current.setRunway(departureRunway);
+        }
+      }
+    };
+
+    handleModeSwitch();
+  }, [mode, arrivalIcao, departureIcao, arrivalRunway, departureRunway]);
+
   const handleWeightDataChange = useCallback((newFuel: number, newCargo: number, newPax: number) => {
     setFuel(newFuel);
     setCargo(newCargo);
@@ -109,6 +153,11 @@ export default function Index() {
   }, []);
 
   const handleSaveToLogbook = useCallback(() => {
+    if (!currentAircraft) {
+      toast.error('Selecione uma aeronave primeiro');
+      return;
+    }
+
     const takeoffSpeeds = speedCalcTakeoffRef.current?.getSpeeds() || { v1: 0, vr: 0, v2: 0, flapConfig: '' };
     const landingSpeeds = speedCalcLandingRef.current?.getSpeeds() || { vref: 0, vapp: 0, flapConfig: '' };
 
@@ -116,7 +165,7 @@ export default function Index() {
       departureIcao,
       arrivalIcao,
       aircraftId: selectedAircraftId,
-      aircraftName: selectedAircraft.name,
+      aircraftName: currentAircraft.name,
       fuel,
       cargo,
       passengers,
@@ -141,7 +190,7 @@ export default function Index() {
 
     setIsSimBriefImport(false);
   }, [
-    departureIcao, arrivalIcao, selectedAircraftId, selectedAircraft.name,
+    departureIcao, arrivalIcao, selectedAircraftId, currentAircraft,
     fuel, cargo, passengers, weight, metar, isSimBriefImport, mode, saveEntry
   ]);
 
@@ -231,8 +280,8 @@ export default function Index() {
               <WeightInput
                 ref={weightInputRef}
                 weight={weight}
-                emptyWeight={selectedAircraft.empty}
-                maxWeight={selectedAircraft.max}
+                emptyWeight={currentAircraft.empty}
+                maxWeight={currentAircraft.max}
                 onWeightChange={setWeight}
                 onDataChange={handleWeightDataChange}
               />
@@ -243,6 +292,7 @@ export default function Index() {
                 ref={metarDisplayRef}
                 onMetarFetched={setMetar} 
                 activeIcao={mode === 'takeoff' ? departureIcao : arrivalIcao}
+                contextLabel={mode === 'takeoff' ? (departureIcao ? `${departureIcao} (Partida)` : 'Partida') : (arrivalIcao ? `${arrivalIcao} (Chegada)` : 'Chegada')}
               />
               {metar && (
                 <RunwaySelector 
@@ -272,7 +322,7 @@ export default function Index() {
                 <TabsContent value="takeoff">
                   <SpeedCalculator
                     ref={speedCalcTakeoffRef}
-                    aircraft={selectedAircraft}
+                    aircraft={currentAircraft}
                     weight={weight}
                     mode="takeoff"
                     headwind={metar?.windSpeed || 0}
@@ -282,7 +332,7 @@ export default function Index() {
                 <TabsContent value="landing">
                   <SpeedCalculator
                     ref={speedCalcLandingRef}
-                    aircraft={selectedAircraft}
+                    aircraft={currentAircraft}
                     weight={weight}
                     mode="landing"
                     headwind={metar?.windSpeed || 0}

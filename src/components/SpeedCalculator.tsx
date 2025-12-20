@@ -1,11 +1,11 @@
-import { useState, useImperativeHandle, forwardRef } from 'react';
+import { useState, useImperativeHandle, forwardRef, useEffect } from 'react';
 import { Aircraft } from '@/data/aircraft';
-import { calculateTakeoffSpeeds, calculateLandingSpeeds, calculateWeightRatio } from '@/utils/calculations';
+import { calculateTakeoffSpeeds, calculateLandingSpeeds, calculateWeightRatio, safeNumber } from '@/utils/calculations';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Gauge, ArrowUp, ArrowDown } from 'lucide-react';
+import { Gauge, ArrowUp, ArrowDown, AlertTriangle } from 'lucide-react';
 
 interface SpeedCalculatorProps {
-  aircraft: Aircraft;
+  aircraft: Aircraft | null | undefined;
   weight: number;
   mode: 'takeoff' | 'landing';
   headwind: number;
@@ -17,22 +17,43 @@ export interface SpeedCalculatorRef {
 
 const SpeedCalculator = forwardRef<SpeedCalculatorRef, SpeedCalculatorProps>(
   ({ aircraft, weight, mode, headwind }, ref) => {
-  const weightRatio = calculateWeightRatio(weight, aircraft.empty, aircraft.max);
   const [selectedFlapIndex, setSelectedFlapIndex] = useState(0);
+
+  // GUARD CLAUSE: Protect against missing aircraft
+  if (!aircraft || !aircraft.to || !aircraft.ldg) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center space-y-2">
+        <AlertTriangle className="w-10 h-10 text-warning" />
+        <p className="text-muted-foreground">Selecione uma aeronave para ver os cálculos</p>
+      </div>
+    );
+  }
+
+  const safeWeight = safeNumber(weight, aircraft.empty);
+  const safeHeadwind = safeNumber(headwind, 0);
+  const weightRatio = calculateWeightRatio(safeWeight, aircraft.empty, aircraft.max);
 
   const availableFlaps = mode === 'takeoff' ? aircraft.to.flaps : aircraft.ldg.flaps;
 
-  // Reset flap index if current index is out of bounds
-  if (selectedFlapIndex >= availableFlaps.length) {
-    setSelectedFlapIndex(0);
+  // Protect against empty flaps array
+  if (!availableFlaps || availableFlaps.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center space-y-2">
+        <AlertTriangle className="w-10 h-10 text-warning" />
+        <p className="text-muted-foreground">Configuração de flaps não disponível</p>
+      </div>
+    );
   }
+
+  // Safe flap index
+  const safeFlap = selectedFlapIndex >= availableFlaps.length ? 0 : selectedFlapIndex;
 
   const speeds =
     mode === 'takeoff'
-      ? calculateTakeoffSpeeds(aircraft, weightRatio, selectedFlapIndex, headwind)
-      : calculateLandingSpeeds(aircraft, weightRatio, selectedFlapIndex, headwind);
+      ? calculateTakeoffSpeeds(aircraft, weightRatio, safeFlap, safeHeadwind)
+      : calculateLandingSpeeds(aircraft, weightRatio, safeFlap, safeHeadwind);
 
-  const currentFlapLabel = availableFlaps[selectedFlapIndex]?.l || '';
+  const currentFlapLabel = availableFlaps[safeFlap]?.l || 'Default';
 
   // Expose method to get current speeds for saving
   useImperativeHandle(ref, () => ({
@@ -43,6 +64,13 @@ const SpeedCalculator = forwardRef<SpeedCalculatorRef, SpeedCalculatorProps>(
     }),
   }), [speeds, mode, currentFlapLabel]);
 
+  // Reset flap index when aircraft changes and current index is invalid
+  useEffect(() => {
+    if (selectedFlapIndex >= availableFlaps.length) {
+      setSelectedFlapIndex(0);
+    }
+  }, [aircraft, mode, availableFlaps.length, selectedFlapIndex]);
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -51,7 +79,7 @@ const SpeedCalculator = forwardRef<SpeedCalculatorRef, SpeedCalculatorProps>(
           FLAP CONFIGURATION
         </label>
         <Select
-          value={selectedFlapIndex.toString()}
+          value={safeFlap.toString()}
           onValueChange={(value) => setSelectedFlapIndex(parseInt(value))}
         >
           <SelectTrigger className="bg-card border-avionics-border text-lg font-mono">
@@ -70,16 +98,16 @@ const SpeedCalculator = forwardRef<SpeedCalculatorRef, SpeedCalculatorProps>(
       <div className="grid gap-3">
         {mode === 'takeoff' && 'v1' in speeds && (
           <>
-            <SpeedCard label="V1" value={speeds.v1} color="text-warning" icon={<ArrowUp className="w-5 h-5" />} />
-            <SpeedCard label="VR" value={speeds.vr} color="text-primary" icon={<ArrowUp className="w-5 h-5" />} />
-            <SpeedCard label="V2" value={speeds.v2} color="text-success" icon={<ArrowUp className="w-5 h-5" />} />
+            <SpeedCard label="V1" value={safeNumber(speeds.v1)} color="text-warning" icon={<ArrowUp className="w-5 h-5" />} />
+            <SpeedCard label="VR" value={safeNumber(speeds.vr)} color="text-primary" icon={<ArrowUp className="w-5 h-5" />} />
+            <SpeedCard label="V2" value={safeNumber(speeds.v2)} color="text-success" icon={<ArrowUp className="w-5 h-5" />} />
           </>
         )}
 
         {mode === 'landing' && 'vref' in speeds && (
           <>
-            <SpeedCard label="VREF" value={speeds.vref} color="text-primary" icon={<ArrowDown className="w-5 h-5" />} />
-            <SpeedCard label="VAPP" value={speeds.vapp} color="text-success" icon={<ArrowDown className="w-5 h-5" />} />
+            <SpeedCard label="VREF" value={safeNumber(speeds.vref)} color="text-primary" icon={<ArrowDown className="w-5 h-5" />} />
+            <SpeedCard label="VAPP" value={safeNumber(speeds.vapp)} color="text-success" icon={<ArrowDown className="w-5 h-5" />} />
           </>
         )}
       </div>
@@ -92,13 +120,15 @@ SpeedCalculator.displayName = 'SpeedCalculator';
 export default SpeedCalculator;
 
 function SpeedCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
+  const displayValue = isNaN(value) || !isFinite(value) ? '---' : value;
+  
   return (
     <div className="bg-avionics-panel border border-avionics-border rounded-lg p-4 flex items-center justify-between">
       <div className="flex items-center gap-3">
         <div className={color}>{icon}</div>
         <div>
           <div className="text-xs text-muted-foreground font-medium">{label}</div>
-          <div className={`text-4xl font-mono font-bold ${color}`}>{value}</div>
+          <div className={`text-4xl font-mono font-bold ${color}`}>{displayValue}</div>
         </div>
       </div>
       <div className="text-sm text-muted-foreground font-mono">KIAS</div>

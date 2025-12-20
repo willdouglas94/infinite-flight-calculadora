@@ -68,6 +68,7 @@ interface SimBriefImportProps {
     departureIcao: string;
     arrivalIcao: string;
     aircraftId: string | null;
+    aircraftNotFound: boolean;
     fuel: number;
     cargo: number;
     passengers: number;
@@ -168,6 +169,7 @@ export default function SimBriefImport({ onImport }: SimBriefImportProps) {
         departureIcao,
         arrivalIcao,
         aircraftId,
+        aircraftNotFound: !aircraftId,
         fuel: fuelKg,
         cargo: cargoKg,
         passengers: passengersCount,

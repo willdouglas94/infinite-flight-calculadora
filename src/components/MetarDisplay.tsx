@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 interface MetarDisplayProps {
   onMetarFetched: (metar: MetarData) => void;
   activeIcao?: string;
+  contextLabel?: string;
 }
 
 export interface MetarDisplayRef {
@@ -15,7 +16,7 @@ export interface MetarDisplayRef {
 }
 
 const MetarDisplay = forwardRef<MetarDisplayRef, MetarDisplayProps>(
-  ({ onMetarFetched, activeIcao }, ref) => {
+  ({ onMetarFetched, activeIcao, contextLabel }, ref) => {
   const [icao, setIcao] = useState('');
   const [metar, setMetar] = useState<MetarData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -89,6 +90,12 @@ const MetarDisplay = forwardRef<MetarDisplayRef, MetarDisplayProps>(
 
   return (
     <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-2">
+        <Cloud className="w-4 h-4 text-primary" />
+        <span className="text-sm font-medium text-muted-foreground">
+          METAR{contextLabel ? `: ${contextLabel}` : ''}
+        </span>
+      </div>
       <div className="flex gap-2">
         <Input
           placeholder="ICAO (e.g., SBGR)"

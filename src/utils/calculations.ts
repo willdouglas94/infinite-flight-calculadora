@@ -8,6 +8,14 @@ export interface SpeedResults {
   vapp: number;
 }
 
+// Utility function to ensure valid numbers
+export function safeNumber(value: number | undefined | null, fallback: number = 0): number {
+  if (value === undefined || value === null || isNaN(value) || !isFinite(value)) {
+    return fallback;
+  }
+  return value;
+}
+
 export function calculateWeightRatio(
   currentWeight: number,
   emptyWeight: number,

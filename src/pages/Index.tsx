@@ -26,6 +26,22 @@ export default function Index() {
   const [selectedAircraft, setSelectedAircraft] = useState<Aircraft | null>(AIRCRAFT_DB[firstAircraftId] || null);
   const [weight, setWeight] = useState((selectedAircraft?.empty || 50000) + 10000);
   const [mode, setMode] = useState<'takeoff' | 'landing'>('takeoff');
+  
+  // AdMob Interstitial Counter
+  const [adCounter, setAdCounter] = useState(0);
+  
+  // Function to trigger interstitial ad every 3 actions
+  const handleAdTrigger = useCallback(() => {
+    setAdCounter(prev => {
+      const newCount = prev + 1;
+      if (newCount >= 3) {
+        // Simulate AdMob interstitial
+        alert('Exibindo Anúncio Intersticial...');
+        return 0; // Reset counter
+      }
+      return newCount;
+    });
+  }, []);
   const [metar, setMetar] = useState<MetarData | null>(null);
   const [departureIcao, setDepartureIcao] = useState('');
   const [arrivalIcao, setArrivalIcao] = useState('');
@@ -69,6 +85,9 @@ export default function Index() {
     arrivalRunway: string;
   }) => {
     try {
+      // Trigger ad counter on SimBrief import
+      handleAdTrigger();
+      
       setDepartureIcao(data.departureIcao || '');
       setArrivalIcao(data.arrivalIcao || '');
       setIsSimBriefImport(true);
@@ -117,7 +136,7 @@ export default function Index() {
       console.error('Error processing SimBrief data:', error);
       toast.error('Erro ao processar dados do SimBrief');
     }
-  }, []);
+  }, [handleAdTrigger]);
 
   // TAB AUTOMATION: Auto-fetch METAR when switching tabs
   useEffect(() => {
@@ -158,6 +177,9 @@ export default function Index() {
       return;
     }
 
+    // Trigger ad counter on save
+    handleAdTrigger();
+
     const takeoffSpeeds = speedCalcTakeoffRef.current?.getSpeeds() || { v1: 0, vr: 0, v2: 0, flapConfig: '' };
     const landingSpeeds = speedCalcLandingRef.current?.getSpeeds() || { vref: 0, vapp: 0, flapConfig: '' };
 
@@ -191,7 +213,7 @@ export default function Index() {
     setIsSimBriefImport(false);
   }, [
     departureIcao, arrivalIcao, selectedAircraftId, currentAircraft,
-    fuel, cargo, passengers, weight, metar, isSimBriefImport, mode, saveEntry
+    fuel, cargo, passengers, weight, metar, isSimBriefImport, mode, saveEntry, handleAdTrigger
   ]);
 
   const handleLoadFromLogbook = useCallback((entry: FlightLogEntry) => {
@@ -217,8 +239,14 @@ export default function Index() {
     });
   }, []);
 
+  // Handle tab change with ad trigger
+  const handleModeChange = useCallback((newMode: string) => {
+    handleAdTrigger();
+    setMode(newMode as 'takeoff' | 'landing');
+  }, [handleAdTrigger]);
+
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="min-h-screen bg-background p-4 md:p-8 pb-24">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -309,7 +337,7 @@ export default function Index() {
           {/* Right Column */}
           <div>
             <Card className="p-6 bg-card border-avionics-border h-full">
-              <Tabs value={mode} onValueChange={(v) => setMode(v as 'takeoff' | 'landing')}>
+              <Tabs value={mode} onValueChange={handleModeChange}>
                 <TabsList className="grid w-full grid-cols-2 mb-6">
                   <TabsTrigger value="takeoff" className="font-mono text-base">
                     TAKEOFF
@@ -354,6 +382,11 @@ export default function Index() {
             </Card>
           </div>
         </div>
+      </div>
+      
+      {/* AdMob Banner Placeholder - Fixed at bottom */}
+      <div className="fixed bottom-0 left-0 w-full h-[60px] bg-slate-950 flex items-center justify-center z-50 border-t border-slate-800">
+        <span className="text-slate-600 text-sm font-mono">Ad Space</span>
       </div>
     </div>
   );

@@ -326,6 +326,7 @@ export default function Index() {
                     weight={weight}
                     mode="takeoff"
                     headwind={metar?.windSpeed || 0}
+                    temperature={metar?.temperature ?? 15}
                   />
                 </TabsContent>
 

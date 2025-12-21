@@ -80,9 +80,22 @@ interface SimBriefImportProps {
 interface SimBriefWeights {
   fuel_plan_ramp?: string;
   block_fuel?: string;
+  est_block_fuel?: string;
   pax_count?: string;
   cargo?: string;
   freight?: string;
+}
+
+interface SimBriefFuel {
+  plan_ramp?: string;
+}
+
+interface SimBriefImages {
+  fuel?: string;
+}
+
+interface SimBriefParams {
+  units?: string;
 }
 
 interface SimBriefResponse {
@@ -90,6 +103,9 @@ interface SimBriefResponse {
   destination?: { icao_code?: string; plan_rwy?: string };
   aircraft?: { icaocode?: string };
   weights?: SimBriefWeights;
+  fuel?: SimBriefFuel;
+  images?: SimBriefImages;
+  params?: SimBriefParams;
 }
 
 export default function SimBriefImport({ onImport }: SimBriefImportProps) {
@@ -147,20 +163,56 @@ export default function SimBriefImport({ onImport }: SimBriefImportProps) {
       const departureRunway = String(data.origin?.plan_rwy || '').trim().toUpperCase();
       const arrivalRunway = String(data.destination?.plan_rwy || '').trim().toUpperCase();
       
-      // Weights - SimBrief returns in lbs, convert to kg with safe parsing
+      // Deep Search for fuel value - SimBrief API path is inconsistent
+      let rampFuel = 0;
+      
+      // 1. Try standard "fuel" location (most common in recent API)
+      if (data.fuel && data.fuel.plan_ramp) {
+        rampFuel = Number(data.fuel.plan_ramp);
+      }
+      // 2. Try alternative "weights" location (common in older layouts)
+      else if (data.weights && data.weights.est_block_fuel) {
+        rampFuel = Number(data.weights.est_block_fuel);
+      }
+      // 3. Try fuel_plan_ramp in weights (another variation)
+      else if (data.weights && data.weights.fuel_plan_ramp) {
+        rampFuel = Number(data.weights.fuel_plan_ramp);
+      }
+      // 4. Try block_fuel in weights
+      else if (data.weights && data.weights.block_fuel) {
+        rampFuel = Number(data.weights.block_fuel);
+      }
+      // 5. Try "images" location (rare fallback)
+      else if (data.images && data.images.fuel) {
+        rampFuel = Number(data.images.fuel);
+      }
+      
+      // Ensure we have a valid number
+      if (isNaN(rampFuel)) rampFuel = 0;
+      
+      // Handle unit conversion based on SimBrief settings
+      const simbriefUnits = data.params?.units || "kgs";
+      // SimBrief typically returns in the user's preferred units
+      // We need to convert to KG for our app
+      if (simbriefUnits === "lbs") {
+        rampFuel = rampFuel * 0.453592;
+      }
+      
+      // Other weights extraction with safe parsing
       const weights = data?.weights || {};
-      const fuelLbs = Number(weights?.fuel_plan_ramp || weights?.block_fuel || 0) || 0;
       const cargoLbs = Number(weights?.cargo || weights?.freight || 0) || 0;
       const passengersCount = Number(weights?.pax_count || 0) || 0;
 
-      // Validate numbers to prevent NaN
-      if (isNaN(fuelLbs) || isNaN(cargoLbs) || isNaN(passengersCount)) {
+      // Validate cargo and passengers
+      if (isNaN(cargoLbs) || isNaN(passengersCount)) {
         throw new Error('Dados de peso inválidos no plano');
       }
 
-      // Convert lbs to kg (1 lb = 0.453592 kg)
-      const fuelKg = Math.round(fuelLbs * 0.453592);
-      const cargoKg = Math.round(cargoLbs * 0.453592);
+      // Convert cargo to kg (cargo is typically in lbs from SimBrief)
+      const fuelKg = Math.round(rampFuel);
+      const cargoKg = simbriefUnits === "lbs" 
+        ? Math.round(cargoLbs * 0.453592) 
+        : Math.round(cargoLbs);
 
       // Find aircraft match
       const aircraftId = findAircraftId(aircraftIcao);

@@ -11,6 +11,7 @@ import RunwaySelector, { RunwaySelectorRef } from '@/components/RunwaySelector';
 import SpeedCalculator, { SpeedCalculatorRef } from '@/components/SpeedCalculator';
 import SimBriefImport from '@/components/SimBriefImport';
 import Logbook from '@/components/Logbook';
+import LiveFuel from '@/components/LiveFuel';
 import { Aircraft, AIRCRAFT_DB } from '@/data/aircraft';
 import { MetarData } from '@/utils/metar';
 import { useLogbook, FlightLogEntry } from '@/hooks/useLogbook';
@@ -25,7 +26,7 @@ export default function Index() {
   const [selectedAircraftId, setSelectedAircraftId] = useState<string>(firstAircraftId);
   const [selectedAircraft, setSelectedAircraft] = useState<Aircraft | null>(AIRCRAFT_DB[firstAircraftId] || null);
   const [weight, setWeight] = useState((selectedAircraft?.empty || 50000) + 10000);
-  const [mode, setMode] = useState<'takeoff' | 'landing'>('takeoff');
+  const [mode, setMode] = useState<'takeoff' | 'inflight' | 'landing'>('takeoff');
   
   // AdMob Interstitial Counter
   const [adCounter, setAdCounter] = useState(0);
@@ -242,7 +243,7 @@ export default function Index() {
   // Handle tab change with ad trigger
   const handleModeChange = useCallback((newMode: string) => {
     handleAdTrigger();
-    setMode(newMode as 'takeoff' | 'landing');
+    setMode(newMode as 'takeoff' | 'inflight' | 'landing');
   }, [handleAdTrigger]);
 
   return (
@@ -338,11 +339,14 @@ export default function Index() {
           <div>
             <Card className="p-6 bg-card border-avionics-border h-full">
               <Tabs value={mode} onValueChange={handleModeChange}>
-                <TabsList className="grid w-full grid-cols-2 mb-6">
-                  <TabsTrigger value="takeoff" className="font-mono text-base">
+                <TabsList className="grid w-full grid-cols-3 mb-6">
+                  <TabsTrigger value="takeoff" className="font-mono text-sm">
                     TAKEOFF
                   </TabsTrigger>
-                  <TabsTrigger value="landing" className="font-mono text-base">
+                  <TabsTrigger value="inflight" className="font-mono text-sm">
+                    EM VOO
+                  </TabsTrigger>
+                  <TabsTrigger value="landing" className="font-mono text-sm">
                     LANDING
                   </TabsTrigger>
                 </TabsList>
@@ -355,6 +359,13 @@ export default function Index() {
                     mode="takeoff"
                     headwind={metar?.windSpeed || 0}
                     temperature={metar?.temperature ?? 15}
+                  />
+                </TabsContent>
+
+                <TabsContent value="inflight">
+                  <LiveFuel 
+                    initialFuel={fuel}
+                    aircraft={currentAircraft}
                   />
                 </TabsContent>
 

@@ -386,7 +386,7 @@ export default function Index() {
       
       {/* AdMob Banner Placeholder - Fixed at bottom */}
       <div className="fixed bottom-0 left-0 w-full h-[60px] bg-slate-950 flex items-center justify-center z-50 border-t border-slate-800">
-        <span className="text-slate-600 text-sm font-mono">Ad Space</span>
+        <span className="text-slate-600 text-sm font-mono">AdMob Banner Area (Ready)</span>
       </div>
     </div>
   );

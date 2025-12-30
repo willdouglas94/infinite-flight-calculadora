@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Download, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Download, Loader2, CheckCircle2, AlertCircle, User, LogOut, Plane } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Mapping SimBrief ICAO codes to our AIRCRAFT_DB keys
@@ -63,6 +63,8 @@ const SIMBRIEF_AIRCRAFT_MAP: Record<string, string> = {
   "C17": "C17",
 };
 
+const LOCALSTORAGE_KEY = 'sb_user';
+
 interface SimBriefImportProps {
   onImport: (data: {
     departureIcao: string;
@@ -109,8 +111,17 @@ interface SimBriefResponse {
 }
 
 export default function SimBriefImport({ onImport }: SimBriefImportProps) {
-  const [username, setUsername] = useState('');
+  const [inputUsername, setInputUsername] = useState('');
+  const [simbriefUser, setSimbriefUser] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Load saved user from localStorage on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem(LOCALSTORAGE_KEY);
+    if (savedUser) {
+      setSimbriefUser(savedUser);
+    }
+  }, []);
 
   const findAircraftId = (icaoCode: string): string | null => {
     const normalizedCode = icaoCode.toUpperCase().trim();
@@ -131,9 +142,31 @@ export default function SimBriefImport({ onImport }: SimBriefImportProps) {
     return null;
   };
 
-  const handleFetch = async () => {
-    if (!username.trim()) {
+  const handleConnect = () => {
+    const username = inputUsername.trim();
+    if (!username) {
       toast.error('Digite seu username do SimBrief');
+      return;
+    }
+    
+    localStorage.setItem(LOCALSTORAGE_KEY, username);
+    setSimbriefUser(username);
+    setInputUsername('');
+    toast.success('Conta SimBrief conectada!', {
+      description: `Bem-vindo, ${username}`,
+      icon: <CheckCircle2 className="w-4 h-4" />,
+    });
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(LOCALSTORAGE_KEY);
+    setSimbriefUser(null);
+    toast.info('Conta SimBrief desconectada');
+  };
+
+  const handleFetch = async () => {
+    if (!simbriefUser) {
+      toast.error('Conecte sua conta SimBrief primeiro');
       return;
     }
 
@@ -141,7 +174,7 @@ export default function SimBriefImport({ onImport }: SimBriefImportProps) {
 
     try {
       const response = await fetch(
-        `https://www.simbrief.com/api/xml.fetcher.php?username=${encodeURIComponent(username.trim())}&json=1`
+        `https://www.simbrief.com/api/xml.fetcher.php?username=${encodeURIComponent(simbriefUser)}&json=1`
       );
 
       if (!response.ok) {
@@ -250,35 +283,84 @@ export default function SimBriefImport({ onImport }: SimBriefImportProps) {
     }
   };
 
+  // Logged-in state: Show pilot dashboard
+  if (simbriefUser) {
+    return (
+      <Card className="p-4 bg-gradient-to-r from-indigo-950/50 via-slate-900/50 to-indigo-950/50 border-indigo-500/30 shadow-lg shadow-indigo-500/10">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          {/* Pilot Info */}
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-indigo-800 flex items-center justify-center border-2 border-indigo-400/50 shadow-lg">
+              <User className="w-6 h-6 text-indigo-100" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">
+                PILOTO CONECTADO
+              </span>
+              <span className="text-lg font-semibold text-foreground font-mono">
+                {simbriefUser}
+              </span>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button
+              onClick={handleFetch}
+              disabled={loading}
+              className="flex-1 sm:flex-none gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-mono shadow-lg shadow-indigo-600/30"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Buscando plano ativo...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Importar Último Plano
+                </>
+              )}
+            </Button>
+            <Button
+              onClick={handleLogout}
+              variant="ghost"
+              size="icon"
+              className="text-slate-400 hover:text-slate-200 hover:bg-slate-800/50"
+              title="Trocar Conta/Sair"
+            >
+              <LogOut className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  // Not logged in: Show connect form
   return (
     <Card className="p-4 bg-card/50 border-avionics-border">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Download className="w-4 h-4 text-primary" />
-          <span>IMPORTAR DO SIMBRIEF</span>
+          <Plane className="w-4 h-4 text-primary" />
+          <span>CONECTAR SIMBRIEF</span>
         </div>
         <div className="flex flex-1 gap-2 w-full sm:w-auto">
           <Input
             placeholder="Seu Username SimBrief"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleFetch()}
+            value={inputUsername}
+            onChange={(e) => setInputUsername(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
             className="font-mono bg-card border-avionics-border flex-1"
           />
           <Button
-            onClick={handleFetch}
-            disabled={loading || !username.trim()}
+            onClick={handleConnect}
+            disabled={!inputUsername.trim()}
             variant="secondary"
-            className="whitespace-nowrap"
+            className="whitespace-nowrap gap-2"
           >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Buscando...
-              </>
-            ) : (
-              'Carregar Último Voo'
-            )}
+            <User className="w-4 h-4" />
+            Conectar
           </Button>
         </div>
       </div>

@@ -22,6 +22,9 @@ export interface FlightLogEntry {
   vapp: number;
   isSimBriefImport: boolean;
   flapConfig: string;
+  // Optional enhanced fields
+  estTimeEnroute?: number; // in hours (can be fractional)
+  stepClimb?: string; // e.g. "310/350/390"
 }
 
 const STORAGE_KEY = "flight_history";

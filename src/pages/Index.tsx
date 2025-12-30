@@ -12,6 +12,12 @@ import SpeedCalculator, { SpeedCalculatorRef } from '@/components/SpeedCalculato
 import SimBriefImport from '@/components/SimBriefImport';
 import Logbook from '@/components/Logbook';
 import LiveFuel from '@/components/LiveFuel';
+import CrosswindVisualizer from '@/components/CrosswindVisualizer';
+import TodCalculator from '@/components/TodCalculator';
+import ChecklistComponent from '@/components/ChecklistComponent';
+import StepClimbCard from '@/components/StepClimbCard';
+import RankHeader from '@/components/RankHeader';
+import ApproachTimer from '@/components/ApproachTimer';
 import { Aircraft, AIRCRAFT_DB } from '@/data/aircraft';
 import { MetarData } from '@/utils/metar';
 import { useLogbook, FlightLogEntry } from '@/hooks/useLogbook';
@@ -55,6 +61,8 @@ export default function Index() {
   const [isSimBriefRunway, setIsSimBriefRunway] = useState(false);
   const [departureMetar, setDepartureMetar] = useState<MetarData | null>(null);
   const [arrivalMetar, setArrivalMetar] = useState<MetarData | null>(null);
+  const [stepClimb, setStepClimb] = useState<string | null>(null);
+  const [estTimeEnroute, setEstTimeEnroute] = useState<number | null>(null);
 
   const weightInputRef = useRef<WeightInputRef>(null);
   const metarDisplayRef = useRef<MetarDisplayRef>(null);
@@ -84,6 +92,8 @@ export default function Index() {
     passengers: number;
     departureRunway: string;
     arrivalRunway: string;
+    stepClimb?: string | null;
+    estTimeEnroute?: number | null;
   }) => {
     try {
       // Trigger ad counter on SimBrief import
@@ -95,6 +105,8 @@ export default function Index() {
       setFuel(data.fuel || 0);
       setCargo(data.cargo || 0);
       setPassengers(data.passengers || 0);
+      setStepClimb(data.stepClimb || null);
+      setEstTimeEnroute(data.estTimeEnroute ?? null);
       
       // Set runways from SimBrief
       if (data.departureRunway) {
@@ -204,6 +216,8 @@ export default function Index() {
       vapp: landingSpeeds.vapp || 0,
       isSimBriefImport,
       flapConfig: mode === 'takeoff' ? takeoffSpeeds.flapConfig : landingSpeeds.flapConfig,
+      estTimeEnroute: estTimeEnroute ?? undefined,
+      stepClimb: stepClimb ?? undefined,
     });
 
     toast.success('Voo salvo no Logbook!', {
@@ -258,7 +272,8 @@ export default function Index() {
               <p className="text-sm text-muted-foreground">Infinite Flight Speed Calculator</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            <RankHeader entries={entries} userName={localStorage.getItem('sb_user') || undefined} />
             <Logbook entries={entries} onLoad={handleLoadFromLogbook} onDelete={deleteEntry} />
             <Badge variant="secondary" className="text-sm font-mono bg-primary/20 text-primary border-primary/30 hidden sm:inline-flex">
               ALL JETS
@@ -314,6 +329,7 @@ export default function Index() {
                 onWeightChange={setWeight}
                 onDataChange={handleWeightDataChange}
               />
+              <TodCalculator currentAltitude={35000} />
             </Card>
 
             <Card className="p-6 bg-card border-avionics-border space-y-4">
@@ -331,6 +347,16 @@ export default function Index() {
                   suggestedRunway={mode === 'takeoff' ? departureRunway : arrivalRunway}
                   isSimBriefSuggestion={isSimBriefRunway}
                 />
+              )}
+              {metar && (
+                <CrosswindVisualizer
+                  windDir={metar.windDirection}
+                  windSpeed={metar.windSpeed}
+                  rwyHdg={Number((mode === 'takeoff' ? departureRunway : arrivalRunway).replace(/[^0-9]/g, '')) * 10 || null}
+                />
+              )}
+              {stepClimb && (
+                <StepClimbCard stepClimb={stepClimb} />
               )}
             </Card>
           </div>
@@ -377,8 +403,11 @@ export default function Index() {
                     mode="landing"
                     headwind={metar?.windSpeed || 0}
                   />
+                  <ApproachTimer />
                 </TabsContent>
               </Tabs>
+
+              <ChecklistComponent />
 
               {/* Save to Logbook Button */}
               <div className="mt-6 pt-4 border-t border-avionics-border">

@@ -76,6 +76,8 @@ interface SimBriefImportProps {
     passengers: number;
     departureRunway: string;
     arrivalRunway: string;
+    stepClimb?: string | null;
+    estTimeEnroute?: number | null;
   }) => void;
 }
 
@@ -108,6 +110,7 @@ interface SimBriefResponse {
   fuel?: SimBriefFuel;
   images?: SimBriefImages;
   params?: SimBriefParams;
+  general?: { stepclimb_string?: string; est_time_enroute?: string | number };
 }
 
 export default function SimBriefImport({ onImport }: SimBriefImportProps) {
@@ -250,6 +253,14 @@ export default function SimBriefImport({ onImport }: SimBriefImportProps) {
       // Find aircraft match
       const aircraftId = findAircraftId(aircraftIcao);
 
+      // Extract optional general fields safely
+      const stepClimb = String(data?.general?.stepclimb_string || '').trim() || null;
+      let estTimeEnroute: number | null = null;
+      if (data?.general?.est_time_enroute) {
+        const parsed = Number(data.general.est_time_enroute);
+        if (!isNaN(parsed) && parsed > 0) estTimeEnroute = parsed;
+      }
+
       onImport({
         departureIcao,
         arrivalIcao,
@@ -260,6 +271,8 @@ export default function SimBriefImport({ onImport }: SimBriefImportProps) {
         passengers: passengersCount,
         departureRunway,
         arrivalRunway,
+        stepClimb,
+        estTimeEnroute,
       });
 
       if (aircraftId) {

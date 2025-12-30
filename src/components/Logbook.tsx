@@ -105,6 +105,13 @@ function FlightCard({ entry, onLoad, onDelete }: FlightCardProps) {
         <Plane className="w-4 h-4 text-muted-foreground" />
         <span className="text-foreground font-medium">{entry.aircraftName}</span>
       </div>
+      {/* Extra SimBrief Info */}
+      {(entry.estTimeEnroute || entry.stepClimb) && (
+        <div className="text-xs text-muted-foreground mt-1 grid grid-cols-2 gap-2">
+          {entry.estTimeEnroute ? <div>ETA Est.: <span className="font-mono">{entry.estTimeEnroute} h</span></div> : null}
+          {entry.stepClimb ? <div>Step Climb: <span className="font-mono">{entry.stepClimb}</span></div> : null}
+        </div>
+      )}
 
       {/* Load Summary */}
       <div className="grid grid-cols-3 gap-2 text-xs">

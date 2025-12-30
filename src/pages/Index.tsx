@@ -19,6 +19,8 @@ import StepClimbCard from '@/components/StepClimbCard';
 import RankHeader from '@/components/RankHeader';
 import CabinPA from '@/components/CabinPA';
 import ApproachTimer from '@/components/ApproachTimer';
+import MapView from '@/components/MapView';
+import ChartsButton from '@/components/ChartsButton';
 import { Aircraft, AIRCRAFT_DB } from '@/data/aircraft';
 import { MetarData } from '@/utils/metar';
 import { useLogbook, FlightLogEntry } from '@/hooks/useLogbook';
@@ -286,8 +288,16 @@ export default function Index() {
         {/* SimBrief Import */}
         <SimBriefImport onImport={handleSimBriefImport} />
 
-        {/* Main Content */}
-        <div className="grid lg:grid-cols-2 gap-6">
+        {/* Main / Mapa Tabs */}
+        <div className="space-y-4">
+          <Tabs defaultValue="main">
+            <TabsList className="w-full grid grid-cols-2 mb-2">
+              <TabsTrigger value="main" className="font-mono text-sm">PRINCIPAL</TabsTrigger>
+              <TabsTrigger value="map" className="font-mono text-sm">MAPA</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="main">
+              <div className="grid lg:grid-cols-2 gap-6">
           {/* Left Column */}
           <div className="space-y-6">
             <Card className="p-6 bg-card border-avionics-border space-y-6">
@@ -299,13 +309,16 @@ export default function Index() {
                     <MapPin className="w-4 h-4 text-primary" />
                     DEPARTURE
                   </label>
-                  <Input
-                    placeholder="ICAO (e.g., SBGR)"
-                    value={departureIcao}
-                    onChange={(e) => setDepartureIcao(e.target.value.toUpperCase())}
-                    maxLength={4}
-                    className="font-mono text-lg uppercase bg-card border-avionics-border"
-                  />
+                  <div className="flex items-center">
+                    <Input
+                      placeholder="ICAO (e.g., SBGR)"
+                      value={departureIcao}
+                      onChange={(e) => setDepartureIcao(e.target.value.toUpperCase())}
+                      maxLength={4}
+                      className="font-mono text-lg uppercase bg-card border-avionics-border flex-1"
+                    />
+                    <ChartsButton icao={departureIcao} />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -313,13 +326,16 @@ export default function Index() {
                     <MapPin className="w-4 h-4 text-primary" />
                     ARRIVAL
                   </label>
-                  <Input
-                    placeholder="ICAO (e.g., KJFK)"
-                    value={arrivalIcao}
-                    onChange={(e) => setArrivalIcao(e.target.value.toUpperCase())}
-                    maxLength={4}
-                    className="font-mono text-lg uppercase bg-card border-avionics-border"
-                  />
+                  <div className="flex items-center">
+                    <Input
+                      placeholder="ICAO (e.g., KJFK)"
+                      value={arrivalIcao}
+                      onChange={(e) => setArrivalIcao(e.target.value.toUpperCase())}
+                      maxLength={4}
+                      className="font-mono text-lg uppercase bg-card border-avionics-border flex-1"
+                    />
+                    <ChartsButton icao={arrivalIcao} />
+                  </div>
                 </div>
               </div>
 
@@ -423,9 +439,19 @@ export default function Index() {
               </div>
             </Card>
           </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="map">
+              <Card className="p-4 bg-card border-avionics-border">
+                <MapView origin={departureIcao || undefined} dest={arrivalIcao || undefined} />
+                <div className="mt-3 text-xs text-muted-foreground">Toque para arrastar/zoom no mapa. Se as posições não aparecerem, experimente inserir códigos ICAO válidos.</div>
+              </Card>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
-      
+
       {/* AdMob Banner Placeholder - Fixed at bottom */}
       <div className="fixed bottom-0 left-0 w-full h-[60px] bg-slate-950 flex items-center justify-center z-50 border-t border-slate-800">
         <span className="text-slate-600 text-sm font-mono">AdMob Banner Area (Ready)</span>

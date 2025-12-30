@@ -17,6 +17,7 @@ import TodCalculator from '@/components/TodCalculator';
 import ChecklistComponent from '@/components/ChecklistComponent';
 import StepClimbCard from '@/components/StepClimbCard';
 import RankHeader from '@/components/RankHeader';
+import CabinPA from '@/components/CabinPA';
 import ApproachTimer from '@/components/ApproachTimer';
 import { Aircraft, AIRCRAFT_DB } from '@/data/aircraft';
 import { MetarData } from '@/utils/metar';
@@ -274,6 +275,7 @@ export default function Index() {
           </div>
           <div className="flex items-center gap-4">
             <RankHeader entries={entries} userName={localStorage.getItem('sb_user') || undefined} />
+            <CabinPA arrivalIcao={arrivalIcao} temp={metar?.temperature ?? null} />
             <Logbook entries={entries} onLoad={handleLoadFromLogbook} onDelete={deleteEntry} />
             <Badge variant="secondary" className="text-sm font-mono bg-primary/20 text-primary border-primary/30 hidden sm:inline-flex">
               ALL JETS

@@ -78,6 +78,10 @@ interface SimBriefImportProps {
     arrivalRunway: string;
     stepClimb?: string | null;
     estTimeEnroute?: number | null;
+    originLat?: number | null;
+    originLon?: number | null;
+    destLat?: number | null;
+    destLon?: number | null;
   }) => void;
 }
 
@@ -105,6 +109,9 @@ interface SimBriefParams {
 interface SimBriefResponse {
   origin?: { icao_code?: string; plan_rwy?: string };
   destination?: { icao_code?: string; plan_rwy?: string };
+  // optional coordinates that some SimBrief responses include
+  origin?: ( { icao_code?: string; plan_rwy?: string } & { pos_lat?: string | number; pos_long?: string | number }) ;
+  destination?: ( { icao_code?: string; plan_rwy?: string } & { pos_lat?: string | number; pos_long?: string | number }) ;
   aircraft?: { icaocode?: string };
   weights?: SimBriefWeights;
   fuel?: SimBriefFuel;
@@ -273,6 +280,10 @@ export default function SimBriefImport({ onImport }: SimBriefImportProps) {
         arrivalRunway,
         stepClimb,
         estTimeEnroute,
+        originLat: data.origin && (data.origin as any).pos_lat ? Number((data.origin as any).pos_lat) : undefined,
+        originLon: data.origin && (data.origin as any).pos_long ? Number((data.origin as any).pos_long) : undefined,
+        destLat: data.destination && (data.destination as any).pos_lat ? Number((data.destination as any).pos_lat) : undefined,
+        destLon: data.destination && (data.destination as any).pos_long ? Number((data.destination as any).pos_long) : undefined,
       });
 
       if (aircraftId) {

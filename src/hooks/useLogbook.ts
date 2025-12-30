@@ -25,6 +25,11 @@ export interface FlightLogEntry {
   // Optional enhanced fields
   estTimeEnroute?: number; // in hours (can be fractional)
   stepClimb?: string; // e.g. "310/350/390"
+  // Optional coordinates from SimBrief
+  originLat?: number;
+  originLon?: number;
+  destLat?: number;
+  destLon?: number;
 }
 
 const STORAGE_KEY = "flight_history";

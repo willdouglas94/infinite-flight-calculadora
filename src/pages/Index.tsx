@@ -66,6 +66,8 @@ export default function Index() {
   const [arrivalMetar, setArrivalMetar] = useState<MetarData | null>(null);
   const [stepClimb, setStepClimb] = useState<string | null>(null);
   const [estTimeEnroute, setEstTimeEnroute] = useState<number | null>(null);
+  const [originCoord, setOriginCoord] = useState<{ lat: number; lon: number } | null>(null);
+  const [destCoord, setDestCoord] = useState<{ lat: number; lon: number } | null>(null);
 
   const weightInputRef = useRef<WeightInputRef>(null);
   const metarDisplayRef = useRef<MetarDisplayRef>(null);
@@ -97,6 +99,10 @@ export default function Index() {
     arrivalRunway: string;
     stepClimb?: string | null;
     estTimeEnroute?: number | null;
+    originLat?: number | null;
+    originLon?: number | null;
+    destLat?: number | null;
+    destLon?: number | null;
   }) => {
     try {
       // Trigger ad counter on SimBrief import
@@ -110,6 +116,17 @@ export default function Index() {
       setPassengers(data.passengers || 0);
       setStepClimb(data.stepClimb || null);
       setEstTimeEnroute(data.estTimeEnroute ?? null);
+      // set coordinates if present
+      if (data.originLat != null && data.originLon != null) {
+        setOriginCoord({ lat: data.originLat, lon: data.originLon });
+      } else {
+        setOriginCoord(null);
+      }
+      if (data.destLat != null && data.destLon != null) {
+        setDestCoord({ lat: data.destLat, lon: data.destLon });
+      } else {
+        setDestCoord(null);
+      }
       
       // Set runways from SimBrief
       if (data.departureRunway) {
@@ -221,6 +238,10 @@ export default function Index() {
       flapConfig: mode === 'takeoff' ? takeoffSpeeds.flapConfig : landingSpeeds.flapConfig,
       estTimeEnroute: estTimeEnroute ?? undefined,
       stepClimb: stepClimb ?? undefined,
+      originLat: originCoord?.lat,
+      originLon: originCoord?.lon,
+      destLat: destCoord?.lat,
+      destLon: destCoord?.lon,
     });
 
     toast.success('Voo salvo no Logbook!', {
@@ -444,7 +465,14 @@ export default function Index() {
 
             <TabsContent value="map">
               <Card className="p-4 bg-card border-avionics-border">
-                <MapView origin={departureIcao || undefined} dest={arrivalIcao || undefined} />
+                <MapView
+                  origin={departureIcao || undefined}
+                  dest={arrivalIcao || undefined}
+                  originCoord={originCoord || undefined}
+                  destCoord={destCoord || undefined}
+                  departureIcao={departureIcao}
+                  arrivalIcao={arrivalIcao}
+                />
                 <div className="mt-3 text-xs text-muted-foreground">Toque para arrastar/zoom no mapa. Se as posições não aparecerem, experimente inserir códigos ICAO válidos.</div>
               </Card>
             </TabsContent>

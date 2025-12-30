@@ -70,6 +70,7 @@ const BUTTONS: Btn[] = [
 
 export default function CabinPA({ arrivalIcao, temp }: Props) {
   const [playingKey, setPlayingKey] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
   const utterRef = useRef<SpeechSynthesisUtterance | null>(null);
   const [langOverride, setLangOverride] = useState<'auto' | 'en' | 'pt'>(() => {
     try { return (typeof window !== 'undefined' && (localStorage.getItem('cabinpa_lang') as any)) || 'auto'; } catch { return 'auto'; }
@@ -87,18 +88,34 @@ export default function CabinPA({ arrivalIcao, temp }: Props) {
   useEffect(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
 
-    const load = () => {
-      const v = window.speechSynthesis.getVoices() || [];
-      setVoices(v);
-      if (!selectedVoiceURI && v.length) {
-        const pref = v.find(x => x.lang && x.lang.toLowerCase().startsWith(shortLang));
-        setSelectedVoiceURI(pref?.voiceURI || v[0]?.voiceURI || null);
+    let mounted = true;
+
+    const loadVoices = () => {
+      try {
+        const v = window.speechSynthesis.getVoices() || [];
+        if (!mounted) return;
+        if (v && v.length) {
+          setVoices(v);
+          // If user hasn't selected a voice, try to pick a language match or fallback to first
+          if (!selectedVoiceURI) {
+            // prefer exact language match
+            const langMatch = v.find(x => x.lang && x.lang.toLowerCase().startsWith(shortLang));
+            // prefer a female-sounding voice by name heuristics (Google, Female)
+            const female = v.find(x => /female|google|wave|susan|alloy/i.test(x.name));
+            const pick = langMatch || female || v[0];
+            setSelectedVoiceURI(pick?.voiceURI || pick?.name || null);
+          }
+        }
+      } catch (e) {
+        console.warn('loadVoices error', e);
       }
     };
 
-    load();
-    window.speechSynthesis.onvoiceschanged = load;
-    return () => { try { (window.speechSynthesis as any).onvoiceschanged = null; } catch {} };
+    loadVoices();
+    // Some browsers populate voices asynchronously
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => { mounted = false; try { (window.speechSynthesis as any).onvoiceschanged = null; } catch {} };
   }, [shortLang, selectedVoiceURI]);
 
   const resetPreferences = () => {
@@ -124,54 +141,83 @@ export default function CabinPA({ arrivalIcao, temp }: Props) {
     } catch {}
   }, [selectedVoiceURI]);
 
-  const speakText = (key: string, text: string) => {
+  const speakText = (key: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      alert('SpeechSynthesis API não disponível neste navegador.');
+      alert(isPt ? 'Seu navegador não suporta avisos sonoros.' : 'Your browser does not support speech synthesis.');
       return;
     }
 
-    // stop current
+    // Build the text dynamically from BUTTONS config to ensure variables are current
+    const btn = BUTTONS.find(b => b.key === key);
+    const text = btn ? btn.buildText({ arrivalIcao, temp, lang: shortLang }) : (isPt ? 'Teste de anúncio de cabine.' : 'This is a cabin announcement test.');
+
+    // stop any queued speech
     stopAll();
 
-    const u = new SpeechSynthesisUtterance(text);
-    // default voice params
-    u.rate = 1; // natural
-    u.pitch = 1;
-    u.lang = langCode;
-
-    // apply voice params from the button if provided (lookup by key)
+    let utterance: SpeechSynthesisUtterance;
     try {
-      const btn = BUTTONS.find(b => b.key === key);
+      utterance = new SpeechSynthesisUtterance(text || (isPt ? 'Nosso destino' : 'our destination'));
+    } catch (e) {
+      console.error('Could not create utterance', e);
+      return;
+    }
+
+    // default params
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    // explicitly set language
+    utterance.lang = langCode;
+
+    // apply voice params if available
+    try {
       if (btn && btn.voice) {
-        if (typeof btn.voice.rate === 'number') u.rate = btn.voice.rate;
-        if (typeof btn.voice.pitch === 'number') u.pitch = btn.voice.pitch;
+        if (typeof btn.voice.rate === 'number') utterance.rate = btn.voice.rate;
+        if (typeof btn.voice.pitch === 'number') utterance.pitch = btn.voice.pitch;
       }
-    } catch {}
+    } catch (e) { console.warn(e); }
 
-    // use selected voice if provided, otherwise try to pick a voice matching language
+    // pick voice safely
     try {
-      const available = voices.length ? voices : window.speechSynthesis.getVoices();
+      const available = voices.length ? voices : window.speechSynthesis.getVoices() || [];
+      let chosen: SpeechSynthesisVoice | undefined;
       if (selectedVoiceURI) {
-        const chosen = available.find(v => v.voiceURI === selectedVoiceURI || v.name === selectedVoiceURI);
-        if (chosen) u.voice = chosen;
-      } else if (available && available.length > 0) {
-        const match = available.find(v => v.lang && v.lang.toLowerCase().startsWith(shortLang));
-        if (match) u.voice = match;
+        chosen = available.find(v => v.voiceURI === selectedVoiceURI || v.name === selectedVoiceURI);
       }
-    } catch {}
+      if (!chosen && available.length > 0) {
+        // try language match
+        chosen = available.find(v => v.lang && v.lang.toLowerCase().startsWith(shortLang));
+      }
+      if (!chosen && available.length > 0) {
+        // fallback to first available
+        chosen = available[0];
+      }
+      if (chosen) utterance.voice = chosen;
+    } catch (e) { console.warn('voice selection failed', e); }
 
-    u.onstart = () => setPlayingKey(key);
-    u.onend = () => {
+    utterance.onstart = () => {
+      setPlayingKey(key);
+      setIsPlaying(true);
+    };
+    utterance.onend = () => {
       setPlayingKey(null);
+      setIsPlaying(false);
       utterRef.current = null;
     };
-    u.onerror = () => {
+    utterance.onerror = (ev) => {
+      console.error('Speech error', ev);
       setPlayingKey(null);
+      setIsPlaying(false);
       utterRef.current = null;
     };
 
-    utterRef.current = u;
-    window.speechSynthesis.speak(u);
+    utterRef.current = utterance;
+    try {
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.error('speak failed', e);
+      setPlayingKey(null);
+      setIsPlaying(false);
+    }
   };
 
   const stopAll = () => {
@@ -229,14 +275,14 @@ export default function CabinPA({ arrivalIcao, temp }: Props) {
 
             <div className="grid grid-cols-2 gap-2">
               {BUTTONS.map(b => (
-                <Button
-                  key={b.key}
-                  onClick={() => speakText(b.key, b.buildText({ arrivalIcao, temp, lang: shortLang }))}
-                  className={`h-12 font-mono text-sm ${playingKey === b.key ? 'ring-2 ring-primary/60 bg-primary/10' : ''}`}
-                >
-                  {isPt ? b.label.pt : b.label.en}
-                </Button>
-              ))}
+                  <Button
+                    key={b.key}
+                    onClick={() => speakText(b.key)}
+                    className={`h-12 font-mono text-sm ${playingKey === b.key || isPlaying ? 'ring-2 ring-primary/60 bg-primary/10' : ''}`}
+                  >
+                    {isPt ? b.label.pt : b.label.en}
+                  </Button>
+                ))}
             </div>
 
             <div className="mt-4 flex items-center justify-between">
@@ -247,7 +293,7 @@ export default function CabinPA({ arrivalIcao, temp }: Props) {
                 </Button>
                 <Button variant="outline" onClick={() => {
                   // quick test sound
-                  speakText('test', isPt ? 'Teste de anúncio de cabine.' : 'This is a cabin announcement test.');
+                  speakText('test');
                 }}>
                   <VolumeX className="w-4 h-4 mr-2" /> {isPt ? 'Teste' : 'Test'}
                 </Button>

@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Fuel, Pause, Play, Edit3, Wifi, WifiOff, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Fuel, Pause, Play, Edit3, Wifi, WifiOff, Loader2, Terminal } from 'lucide-react';
 import { Aircraft } from '@/data/aircraft';
 import { infiniteFlightService, IFData } from '@/services/InfiniteFlightService';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +24,12 @@ interface LiveFuelProps {
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
+interface LogEntry {
+  time: string;
+  message: string;
+  type: 'info' | 'error' | 'success' | 'data';
+}
+
 export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
   const { toast } = useToast();
   
@@ -38,6 +44,17 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
   // IF Connect state
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [n1Value, setN1Value] = useState<number | null>(null);
+  
+  // Debug logs state
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // Add log function
+  const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
+    const now = new Date();
+    const time = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    setLogs(prev => [...prev.slice(-19), { time, message, type }]); // Keep last 20 logs
+  }, []);
 
   // Update initial fuel when prop changes
   useEffect(() => {
@@ -47,26 +64,43 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
     }
   }, [initialFuel, isEditingFuel, isRunning, connectionStatus]);
 
+  // Connect service logs to UI
+  useEffect(() => {
+    infiniteFlightService.onLog((message, type) => {
+      addLog(message, type);
+    });
+  }, [addLog]);
+
   // IF Connect data handler
   useEffect(() => {
     infiniteFlightService.onData((data: IFData) => {
-      // Update fuel from IF
-      const fuelValue = data.fuelWeight ?? data.fuelTotalQuantity;
-      if (fuelValue !== undefined) {
-        setLiveFuel(fuelValue);
-        setInputValue(Math.round(fuelValue).toString());
-      }
-      
-      // Update N1
-      if (data.n1 !== undefined) {
-        setN1Value(data.n1);
+      try {
+        // Update fuel from IF
+        const fuelValue = data.fuelWeight ?? data.fuelTotalQuantity;
+        if (fuelValue !== undefined) {
+          setLiveFuel(fuelValue);
+          setInputValue(Math.round(fuelValue).toString());
+          addLog(`Fuel: ${Math.round(fuelValue)} kg`, 'data');
+        }
+        
+        // Update N1
+        if (data.n1 !== undefined) {
+          setN1Value(data.n1);
+        }
+        
+        // Log all received data
+        const dataKeys = Object.keys(data).join(', ');
+        addLog(`Dados: ${dataKeys}`, 'data');
+      } catch (err) {
+        addLog(`ERRO parse: ${err instanceof Error ? err.message : String(err)}`, 'error');
       }
     });
 
     infiniteFlightService.onStatusChange((status, message) => {
       if (status === 'connected') {
         setConnectionStatus('connected');
-        setIsRunning(false); // Stop manual timer when connected
+        setIsRunning(false);
+        addLog('✓ CONECTADO ao Infinite Flight!', 'success');
         toast({
           title: "Conectado ao Infinite Flight",
           description: "Recebendo dados em tempo real",
@@ -74,8 +108,10 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
       } else if (status === 'disconnected') {
         setConnectionStatus('disconnected');
         setN1Value(null);
+        addLog('✗ Desconectado', 'info');
       } else if (status === 'error') {
         setConnectionStatus('error');
+        addLog(`ERRO: ${message || 'Falha desconhecida'}`, 'error');
         toast({
           title: "Erro de Conexão",
           description: message || "Falha ao conectar",
@@ -83,7 +119,7 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
         });
       }
     });
-  }, [toast]);
+  }, [toast, addLog]);
 
   // Fuel countdown timer (only when not connected to IF)
   useEffect(() => {
@@ -135,17 +171,30 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
   }, [connectionStatus]);
 
   const toggleIFConnect = useCallback(async () => {
-    if (connectionStatus === 'connected') {
-      await infiniteFlightService.disconnect();
-      setConnectionStatus('disconnected');
-    } else if (connectionStatus === 'disconnected' || connectionStatus === 'error') {
-      setConnectionStatus('connecting');
-      const success = await infiniteFlightService.connect();
-      if (!success) {
-        setConnectionStatus('error');
+    try {
+      if (connectionStatus === 'connected') {
+        addLog('Desconectando...', 'info');
+        await infiniteFlightService.disconnect();
+        setConnectionStatus('disconnected');
+        addLog('Desconectado com sucesso', 'info');
+      } else if (connectionStatus === 'disconnected' || connectionStatus === 'error') {
+        addLog('Iniciando conexão TCP...', 'info');
+        addLog('Host: 127.0.0.1:10111', 'info');
+        setConnectionStatus('connecting');
+        
+        const success = await infiniteFlightService.connect();
+        
+        if (!success) {
+          setConnectionStatus('error');
+          addLog('Falha na conexão - ver logs acima', 'error');
+        }
       }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      addLog(`EXCEÇÃO: ${errorMsg}`, 'error');
+      setConnectionStatus('error');
     }
-  }, [connectionStatus]);
+  }, [connectionStatus, addLog]);
 
   // Calculate time remaining
   const hoursRemaining = fuelFlow > 0 ? liveFuel / fuelFlow : 0;
@@ -324,6 +373,42 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Debug Console */}
+      <div className="bg-black border border-green-500/30 rounded-lg overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border-b border-green-500/20">
+          <Terminal className="w-4 h-4 text-green-400" />
+          <span className="text-xs font-mono font-bold text-green-400 uppercase tracking-wider">
+            Debug Console
+          </span>
+          <span className="text-[10px] text-green-400/60 ml-auto">
+            {logs.length} logs
+          </span>
+        </div>
+        <div className="p-3 h-32 overflow-y-auto font-mono text-xs">
+          {logs.length === 0 ? (
+            <div className="text-green-400/50 italic">
+              Aguardando conexão... Clique em "Conectar ao IF" para iniciar.
+            </div>
+          ) : (
+            logs.slice(-5).map((log, index) => (
+              <div 
+                key={index} 
+                className={`flex gap-2 ${
+                  log.type === 'error' ? 'text-red-400' :
+                  log.type === 'success' ? 'text-green-400' :
+                  log.type === 'data' ? 'text-cyan-400' :
+                  'text-green-400/80'
+                }`}
+              >
+                <span className="text-green-400/60 shrink-0">[{log.time}]</span>
+                <span className="break-all">{log.message}</span>
+              </div>
+            ))
+          )}
+          <div ref={logsEndRef} />
+        </div>
       </div>
     </div>
   );

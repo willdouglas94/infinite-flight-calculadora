@@ -14,12 +14,14 @@ interface IFData {
 
 type DataCallback = (data: IFData) => void;
 type StatusCallback = (status: 'connected' | 'disconnected' | 'error', message?: string) => void;
+type LogCallback = (message: string, type: 'info' | 'error' | 'success' | 'data') => void;
 
 class InfiniteFlightService {
   private socket: any = null;
   private isConnected: boolean = false;
   private dataCallback: DataCallback | null = null;
   private statusCallback: StatusCallback | null = null;
+  private logCallback: LogCallback | null = null;
   private TcpSocket: any = null;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 3;
@@ -41,24 +43,32 @@ class InfiniteFlightService {
   async initialize(): Promise<boolean> {
     // Only try to load TCP socket on native platforms
     if (!this.isNativePlatform) {
-      console.log('[IF Service] Running on web - TCP Socket not available');
+      const msg = 'Running on web - TCP Socket not available';
+      console.log('[IF Service]', msg);
+      this.logCallback?.(msg, 'info');
       return false;
     }
+
+    this.logCallback?.('Carregando plugin TCP...', 'info');
 
     try {
       // Dynamic import to avoid breaking web version
       const module = await import('capacitor-tcp-socket');
       this.TcpSocket = module.TcpSocket;
       console.log('[IF Service] TCP Socket plugin loaded successfully');
+      this.logCallback?.('Plugin TCP carregado!', 'success');
       return true;
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.warn('[IF Service] TCP Socket plugin not available:', error);
+      this.logCallback?.(`Plugin não encontrado: ${errorMsg}`, 'error');
       return false;
     }
   }
 
   async connect(): Promise<boolean> {
     if (!this.TcpSocket) {
+      this.logCallback?.('Inicializando plugin...', 'info');
       const initialized = await this.initialize();
       if (!initialized) {
         this.statusCallback?.('error', 'Funcionalidade disponível apenas no App Nativo Android');
@@ -67,10 +77,14 @@ class InfiniteFlightService {
     }
 
     try {
+      this.logCallback?.(`Conectando a ${this.HOST}:${this.PORT}...`, 'info');
       console.log(`[IF Service] Connecting to ${this.HOST}:${this.PORT}...`);
       
+      this.logCallback?.('Criando socket...', 'info');
       this.socket = await this.TcpSocket.create();
+      this.logCallback?.(`Socket criado: ID=${this.socket?.socketId}`, 'success');
       
+      this.logCallback?.('Abrindo conexão TCP...', 'info');
       await this.TcpSocket.connect({
         socketId: this.socket.socketId,
         host: this.HOST,
@@ -79,17 +93,21 @@ class InfiniteFlightService {
 
       this.isConnected = true;
       this.reconnectAttempts = 0;
+      this.logCallback?.('Conexão TCP estabelecida!', 'success');
       this.statusCallback?.('connected');
       console.log('[IF Service] Connected to Infinite Flight!');
 
       // Start listening for data
+      this.logCallback?.('Iniciando listener de dados...', 'info');
       this.listen();
 
       return true;
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[IF Service] Connection failed:', error);
+      this.logCallback?.(`ERRO conexão: ${errorMsg}`, 'error');
       this.isConnected = false;
-      this.statusCallback?.('error', 'Falha ao conectar. Verifique se o Infinite Flight está rodando.');
+      this.statusCallback?.('error', `Falha: ${errorMsg}`);
       return false;
     }
   }
@@ -101,28 +119,38 @@ class InfiniteFlightService {
       // Set up data listener
       await this.TcpSocket.addListener('data', (event: { socketId: number; data: string }) => {
         if (event.socketId === this.socket?.socketId) {
+          const dataLen = event.data?.length || 0;
+          this.logCallback?.(`Dados recebidos: ${dataLen} bytes`, 'data');
           this.parseData(event.data);
         }
       });
+      this.logCallback?.('Listener DATA registrado', 'success');
 
       // Set up disconnect listener
       await this.TcpSocket.addListener('close', (event: { socketId: number }) => {
         if (event.socketId === this.socket?.socketId) {
           console.log('[IF Service] Connection closed');
+          this.logCallback?.('Socket fechado pelo servidor', 'info');
           this.handleDisconnect();
         }
       });
+      this.logCallback?.('Listener CLOSE registrado', 'success');
 
       // Set up error listener
       await this.TcpSocket.addListener('error', (event: { socketId: number; error: string }) => {
         if (event.socketId === this.socket?.socketId) {
           console.error('[IF Service] Socket error:', event.error);
+          this.logCallback?.(`ERRO socket: ${event.error}`, 'error');
           this.handleDisconnect();
         }
       });
+      this.logCallback?.('Listener ERROR registrado', 'success');
+      this.logCallback?.('Aguardando dados do IF...', 'info');
 
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('[IF Service] Listen error:', error);
+      this.logCallback?.(`ERRO listener: ${errorMsg}`, 'error');
     }
   }
 
@@ -211,6 +239,10 @@ class InfiniteFlightService {
 
   onStatusChange(callback: StatusCallback): void {
     this.statusCallback = callback;
+  }
+
+  onLog(callback: LogCallback): void {
+    this.logCallback = callback;
   }
 
   getConnectionStatus(): boolean {

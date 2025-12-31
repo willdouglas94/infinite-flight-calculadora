@@ -12,7 +12,11 @@ const DEFAULT_CHECKLISTS: Record<string, string[]> = {
   'Approach & Landing': ['Landing Lights On', 'Seatbelts Fastened', 'Gear Down', 'Briefing Complete'],
 };
 
-export default function ChecklistComponent() {
+interface ChecklistComponentProps {
+  phase?: string;
+}
+
+export default function ChecklistComponent({ phase }: ChecklistComponentProps) {
   const [state, setState] = useState<Record<string, boolean>>({});
 
   useEffect(()=>{

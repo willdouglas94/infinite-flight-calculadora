@@ -244,10 +244,15 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
         </button>
       </div>
 
+      {/* Platform Debug */}
+      <div className="text-center text-xs text-muted-foreground">
+        Plataforma detectada: {Capacitor.getPlatform()}
+      </div>
+
       {/* Connection Info */}
       {connectionStatus === 'error' && (
         <div className="text-center text-xs text-muted-foreground bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-          <p>⚠️ Funcionalidade disponível apenas no App Nativo Android</p>
+          <p>⚠️ Erro de conexão - verifique os logs abaixo</p>
           <p className="mt-1 opacity-70">Certifique-se que o Infinite Flight está rodando com IF Connect ativo (porta 10111)</p>
         </div>
       )}

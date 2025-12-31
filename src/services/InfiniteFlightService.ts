@@ -3,6 +3,7 @@
 // Web version uses a mock/fallback
 
 import { Capacitor } from '@capacitor/core';
+import { TcpSocket } from 'capacitor-tcp-socket';
 
 interface IFData {
   fuelWeight?: number;
@@ -22,7 +23,7 @@ class InfiniteFlightService {
   private dataCallback: DataCallback | null = null;
   private statusCallback: StatusCallback | null = null;
   private logCallback: LogCallback | null = null;
-  private TcpSocket: any = null;
+  private TcpSocket: any = TcpSocket;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 3;
   private isNativePlatform: boolean = false;
@@ -41,20 +42,11 @@ class InfiniteFlightService {
   }
 
   async initialize(): Promise<boolean> {
-    // Only try to load TCP socket on native platforms
-    if (!this.isNativePlatform) {
-      const msg = 'Running on web - TCP Socket not available';
-      console.log('[IF Service]', msg);
-      this.logCallback?.(msg, 'info');
-      return false;
-    }
-
-    this.logCallback?.('Carregando plugin TCP...', 'info');
+    // Always try to load TCP socket
+    this.logCallback?.('Tentando carregar plugin TCP...', 'info');
 
     try {
-      // Dynamic import to avoid breaking web version
-      const module = await import('capacitor-tcp-socket');
-      this.TcpSocket = module.TcpSocket;
+      // Plugin is already imported
       console.log('[IF Service] TCP Socket plugin loaded successfully');
       this.logCallback?.('Plugin TCP carregado!', 'success');
       return true;
@@ -67,19 +59,11 @@ class InfiniteFlightService {
   }
 
   async connect(): Promise<boolean> {
-    if (!this.TcpSocket) {
-      this.logCallback?.('Inicializando plugin...', 'info');
-      const initialized = await this.initialize();
-      if (!initialized) {
-        this.statusCallback?.('error', 'Funcionalidade disponível apenas no App Nativo Android');
-        return false;
-      }
-    }
-
+    // Always try to connect
+    this.logCallback?.(`Tentando conectar a ${this.HOST}:${this.PORT}...`, 'info');
+    console.log(`[IF Service] Connecting to ${this.HOST}:${this.PORT}...`);
+    
     try {
-      this.logCallback?.(`Conectando a ${this.HOST}:${this.PORT}...`, 'info');
-      console.log(`[IF Service] Connecting to ${this.HOST}:${this.PORT}...`);
-      
       this.logCallback?.('Criando socket...', 'info');
       this.socket = await this.TcpSocket.create();
       this.logCallback?.(`Socket criado: ID=${this.socket?.socketId}`, 'success');

@@ -107,11 +107,8 @@ interface SimBriefParams {
 }
 
 interface SimBriefResponse {
-  origin?: { icao_code?: string; plan_rwy?: string };
-  destination?: { icao_code?: string; plan_rwy?: string };
-  // optional coordinates that some SimBrief responses include
-  origin?: ( { icao_code?: string; plan_rwy?: string } & { pos_lat?: string | number; pos_long?: string | number }) ;
-  destination?: ( { icao_code?: string; plan_rwy?: string } & { pos_lat?: string | number; pos_long?: string | number }) ;
+  origin?: { icao_code?: string; plan_rwy?: string; pos_lat?: string | number; pos_long?: string | number };
+  destination?: { icao_code?: string; plan_rwy?: string; pos_lat?: string | number; pos_long?: string | number };
   aircraft?: { icaocode?: string };
   weights?: SimBriefWeights;
   fuel?: SimBriefFuel;

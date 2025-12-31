@@ -108,11 +108,14 @@ export default function MapView({ origin, dest, originCoord: originFromProps, de
   if (originCoord) positions.push([originCoord.lat, originCoord.lon]);
   if (destCoord) positions.push([destCoord.lat, destCoord.lon]);
 
+  const TileLayerAny = TileLayer as any;
+  const MapContainerAny = MapContainer as any;
+  
   return (
     <div className="w-full h-[60vh] min-h-[500px] rounded-md overflow-hidden relative">
-      <MapContainer center={[0, 0]} zoom={2} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true} touchZoom={true}>
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      <MapContainerAny center={[0, 0]} zoom={2} style={{ height: '100%', width: '100%' }} scrollWheelZoom={true} touchZoom={true}>
+        <TileLayerAny
+          attribution='&copy; OpenStreetMap contributors'
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
 
@@ -134,7 +137,7 @@ export default function MapView({ origin, dest, originCoord: originFromProps, de
         )}
 
         {positions.length === 1 && <FitBounds positions={positions} />}
-      </MapContainer>
+      </MapContainerAny>
 
       {/* Floating Chart Buttons Panel */}
       <div className="absolute top-3 right-3 z-50 bg-card/90 border border-avionics-border rounded-md p-3 shadow-lg w-56">

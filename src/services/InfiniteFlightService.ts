@@ -1,5 +1,8 @@
 // Infinite Flight Connect API v2 Service
 // Uses TCP Socket for native Android/iOS connection
+// Web version uses a mock/fallback
+
+import { Capacitor } from '@capacitor/core';
 
 interface IFData {
   fuelWeight?: number;
@@ -20,12 +23,28 @@ class InfiniteFlightService {
   private TcpSocket: any = null;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 3;
+  private isNativePlatform: boolean = false;
 
   // IF Connect API v2 defaults
   private readonly HOST = '127.0.0.1';
   private readonly PORT = 10111;
 
+  constructor() {
+    // Check if running on native platform
+    try {
+      this.isNativePlatform = Capacitor.isNativePlatform();
+    } catch {
+      this.isNativePlatform = false;
+    }
+  }
+
   async initialize(): Promise<boolean> {
+    // Only try to load TCP socket on native platforms
+    if (!this.isNativePlatform) {
+      console.log('[IF Service] Running on web - TCP Socket not available');
+      return false;
+    }
+
     try {
       // Dynamic import to avoid breaking web version
       const module = await import('capacitor-tcp-socket');
@@ -33,7 +52,7 @@ class InfiniteFlightService {
       console.log('[IF Service] TCP Socket plugin loaded successfully');
       return true;
     } catch (error) {
-      console.warn('[IF Service] TCP Socket plugin not available (web mode):', error);
+      console.warn('[IF Service] TCP Socket plugin not available:', error);
       return false;
     }
   }

@@ -15,4 +15,12 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      external: ['capacitor-tcp-socket'],
+    },
+  },
+  optimizeDeps: {
+    exclude: ['capacitor-tcp-socket'],
+  },
 }));

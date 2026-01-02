@@ -3,7 +3,6 @@
 // Web version uses a mock/fallback
 
 import { Capacitor } from '@capacitor/core';
-import { TcpSocket } from 'capacitor-tcp-socket';
 
 interface IFData {
   fuelWeight?: number;
@@ -23,7 +22,7 @@ class InfiniteFlightService {
   private dataCallback: DataCallback | null = null;
   private statusCallback: StatusCallback | null = null;
   private logCallback: LogCallback | null = null;
-  private TcpSocket: any = TcpSocket;
+  private TcpSocket: any = null;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 3;
   private isNativePlatform: boolean = false;
@@ -42,11 +41,18 @@ class InfiniteFlightService {
   }
 
   async initialize(): Promise<boolean> {
-    // Always try to load TCP socket
+    // Try to dynamically load TCP socket on native platforms
     this.logCallback?.('Tentando carregar plugin TCP...', 'info');
 
+    if (!this.isNativePlatform) {
+      this.logCallback?.('Plataforma web - TCP não disponível', 'info');
+      return false;
+    }
+
     try {
-      // Plugin is already imported
+      // Dynamic import to avoid build errors on web
+      const module = await import('capacitor-tcp-socket');
+      this.TcpSocket = module.TcpSocket;
       console.log('[IF Service] TCP Socket plugin loaded successfully');
       this.logCallback?.('Plugin TCP carregado!', 'success');
       return true;
@@ -59,9 +65,19 @@ class InfiniteFlightService {
   }
 
   async connect(): Promise<boolean> {
-    // Always try to connect
     this.logCallback?.(`Tentando conectar a ${this.HOST}:${this.PORT}...`, 'info');
     console.log(`[IF Service] Connecting to ${this.HOST}:${this.PORT}...`);
+    
+    // Initialize TCP plugin if not loaded
+    if (!this.TcpSocket) {
+      this.logCallback?.('Carregando plugin TCP...', 'info');
+      const initialized = await this.initialize();
+      if (!initialized) {
+        this.logCallback?.('Plugin TCP não disponível nesta plataforma', 'error');
+        this.statusCallback?.('error', 'Plugin TCP não disponível');
+        return false;
+      }
+    }
     
     try {
       this.logCallback?.('Abrindo conexão TCP...', 'info');

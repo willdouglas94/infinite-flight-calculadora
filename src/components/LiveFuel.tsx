@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Fuel, Pause, Play, Edit3, Wifi, WifiOff, Loader2, Terminal } from 'lucide-react';
+import { Fuel, Pause, Play, Edit3, Wifi, WifiOff, Loader2, Terminal, AlertTriangle } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
 import { Aircraft } from '@/data/aircraft';
 import { infiniteFlightService, IFData } from '@/services/InfiniteFlightService';
 import { useToast } from '@/hooks/use-toast';
@@ -17,12 +18,17 @@ const FUEL_FLOW_BY_TYPE: Record<string, number> = {
   warbird: 200,
 };
 
+// Alert thresholds in minutes
+const FUEL_ALERT_CRITICAL = 30; // Critical: 30 min
+const FUEL_ALERT_WARNING = 60; // Warning: 60 min
+
 interface LiveFuelProps {
   initialFuel: number;
   aircraft: Aircraft | null;
 }
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+type FuelAlertLevel = 'normal' | 'warning' | 'critical';
 
 interface LogEntry {
   time: string;
@@ -48,6 +54,12 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
   // Debug logs state
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  
+  // Fuel alert state
+  const [fuelAlertLevel, setFuelAlertLevel] = useState<FuelAlertLevel>('normal');
+  const [alertAcknowledged, setAlertAcknowledged] = useState(false);
+  const alertAudioRef = useRef<HTMLAudioElement | null>(null);
+  const lastAlertLevelRef = useRef<FuelAlertLevel>('normal');
 
   // Add log function
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -200,11 +212,119 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
   const hoursRemaining = fuelFlow > 0 ? liveFuel / fuelFlow : 0;
   const hours = Math.floor(hoursRemaining);
   const minutes = Math.floor((hoursRemaining - hours) * 60);
+  const totalMinutesRemaining = hours * 60 + minutes;
 
   const isConnectedToIF = connectionStatus === 'connected';
 
+  // Fuel alert monitoring
+  useEffect(() => {
+    let newAlertLevel: FuelAlertLevel = 'normal';
+    
+    if (totalMinutesRemaining <= FUEL_ALERT_CRITICAL && totalMinutesRemaining > 0) {
+      newAlertLevel = 'critical';
+    } else if (totalMinutesRemaining <= FUEL_ALERT_WARNING && totalMinutesRemaining > 0) {
+      newAlertLevel = 'warning';
+    }
+    
+    // Only trigger alert if level changed to worse
+    if (newAlertLevel !== lastAlertLevelRef.current) {
+      if (newAlertLevel === 'critical' || (newAlertLevel === 'warning' && lastAlertLevelRef.current === 'normal')) {
+        setAlertAcknowledged(false);
+        
+        // Play alert sound
+        playAlertSound(newAlertLevel);
+        
+        // Log the alert
+        addLog(`⚠️ ALERTA: Combustível ${newAlertLevel === 'critical' ? 'CRÍTICO' : 'BAIXO'} - ${totalMinutesRemaining} min restantes`, 
+               newAlertLevel === 'critical' ? 'error' : 'info');
+      }
+      lastAlertLevelRef.current = newAlertLevel;
+    }
+    
+    setFuelAlertLevel(newAlertLevel);
+  }, [totalMinutesRemaining, addLog]);
+
+  // Play alert sound function
+  const playAlertSound = useCallback((level: FuelAlertLevel) => {
+    try {
+      // Create oscillator for alert beep
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Different frequencies for different alert levels
+      oscillator.frequency.value = level === 'critical' ? 880 : 440;
+      oscillator.type = 'square';
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+      
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.5);
+      
+      // For critical, play multiple beeps
+      if (level === 'critical') {
+        setTimeout(() => {
+          const osc2 = audioContext.createOscillator();
+          const gain2 = audioContext.createGain();
+          osc2.connect(gain2);
+          gain2.connect(audioContext.destination);
+          osc2.frequency.value = 880;
+          osc2.type = 'square';
+          gain2.gain.setValueAtTime(0.3, audioContext.currentTime);
+          gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+          osc2.start(audioContext.currentTime);
+          osc2.stop(audioContext.currentTime + 0.5);
+        }, 600);
+      }
+    } catch (err) {
+      console.log('Could not play alert sound:', err);
+    }
+  }, []);
+
+  // Acknowledge alert
+  const acknowledgeAlert = useCallback(() => {
+    setAlertAcknowledged(true);
+  }, []);
+
   return (
     <div className="space-y-6">
+      {/* Critical Fuel Alert Banner */}
+      {fuelAlertLevel !== 'normal' && !alertAcknowledged && (
+        <div 
+          className={`animate-pulse rounded-xl p-4 border-2 flex items-center justify-between gap-3 ${
+            fuelAlertLevel === 'critical' 
+              ? 'bg-red-500/20 border-red-500 text-red-400' 
+              : 'bg-amber-500/20 border-amber-500 text-amber-400'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <AlertTriangle className={`w-8 h-8 ${fuelAlertLevel === 'critical' ? 'animate-bounce' : ''}`} />
+            <div>
+              <div className="font-bold text-lg uppercase tracking-wide">
+                {fuelAlertLevel === 'critical' ? '⚠️ COMBUSTÍVEL CRÍTICO!' : '⚠️ COMBUSTÍVEL BAIXO'}
+              </div>
+              <div className="text-sm opacity-80">
+                Apenas {totalMinutesRemaining} minutos de combustível restante
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={acknowledgeAlert}
+            className={`px-4 py-2 rounded-lg font-bold text-sm uppercase ${
+              fuelAlertLevel === 'critical'
+                ? 'bg-red-500 text-white hover:bg-red-600'
+                : 'bg-amber-500 text-black hover:bg-amber-600'
+            }`}
+          >
+            OK
+          </button>
+        </div>
+      )}
+
       {/* IF Connect Button */}
       <div className="flex justify-center">
         <button
@@ -246,7 +366,7 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
 
       {/* Platform Debug */}
       <div className="text-center text-xs text-muted-foreground">
-        Plataforma detectada: {Capacitor.getPlatform()}
+        Plataforma: {typeof Capacitor !== 'undefined' ? Capacitor.getPlatform() : 'web'}
       </div>
 
       {/* Connection Info */}
@@ -259,7 +379,11 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
 
       {/* Fuel Display Card */}
       <div className={`bg-gradient-to-br border rounded-xl p-6 space-y-4 transition-all ${
-        isConnectedToIF 
+        fuelAlertLevel === 'critical'
+          ? 'from-red-900/30 to-red-800/10 border-red-500/50 animate-pulse'
+          : fuelAlertLevel === 'warning'
+          ? 'from-amber-900/30 to-amber-800/10 border-amber-500/40'
+          : isConnectedToIF 
           ? 'from-green-900/30 to-green-800/10 border-green-500/30' 
           : 'from-emerald-900/30 to-emerald-800/10 border-emerald-500/30'
       }`}>
@@ -362,11 +486,30 @@ export default function LiveFuel({ initialFuel, aircraft }: LiveFuelProps) {
           </div>
         </div>
         
-        <div className="bg-avionics-panel border border-avionics-border rounded-lg p-4">
+        <div className={`bg-avionics-panel border rounded-lg p-4 ${
+          fuelAlertLevel === 'critical' 
+            ? 'border-red-500 bg-red-500/10' 
+            : fuelAlertLevel === 'warning'
+            ? 'border-amber-500 bg-amber-500/10'
+            : 'border-avionics-border'
+        }`}>
           <div className="text-xs text-muted-foreground font-medium mb-1">TEMPO RESTANTE</div>
-          <div className="text-2xl font-mono font-bold text-primary">
+          <div className={`text-2xl font-mono font-bold ${
+            fuelAlertLevel === 'critical' 
+              ? 'text-red-400' 
+              : fuelAlertLevel === 'warning'
+              ? 'text-amber-400'
+              : 'text-primary'
+          }`}>
             {hours}h {minutes.toString().padStart(2, '0')}m
           </div>
+          {fuelAlertLevel !== 'normal' && (
+            <div className={`text-[10px] mt-1 uppercase font-bold ${
+              fuelAlertLevel === 'critical' ? 'text-red-400' : 'text-amber-400'
+            }`}>
+              {fuelAlertLevel === 'critical' ? '⚠️ CRÍTICO' : '⚠️ BAIXO'}
+            </div>
+          )}
         </div>
 
         {n1Value !== null && (
